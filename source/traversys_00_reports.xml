@@ -1,0 +1,335 @@
+<?xml version="1.0"?>
+<reports version="2.0">
+<!--
+    # Traversys reports definition file
+    # =====================================
+    (c) Copyright 2015-2021, Traversys Limited
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+-->
+
+    <!-- ################ REPORTS ############## -->
+
+    <report name="Traversys.SSL_Certificates">
+        <title>SSL Certificates</title>
+        <description>Discovered SSL Certificates</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail"</where>
+        <show>name,
+              common_names,
+              _issuer_organization_name,
+              serial,
+              valid_from,
+              valid_to,
+              self_signed,
+              #Detail:Detail:ElementWithDetail:.name as "Devices(s)"
+        </show>
+    </report>
+
+    <report name="Traversys.SSL_SelfSigned">
+        <title>SSL Certificates - Self Signed</title>
+        <description>Self Signed SSL Certificates</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail"
+               and self_signed
+        </where>
+        <show>name,
+              common_names,
+              _issuer_organization_name,
+              serial,
+              valid_from,
+              valid_to,
+              #Detail:Detail:ElementWithDetail:.name as "Devices(s)"
+        </show>
+    </report>
+
+    <report name="Traversys.SSL_Valid">
+        <title>SSL Certificates - CA Signed</title>
+        <description>SSL Certificates signed by a Certificate Authority</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail"
+               and not self_signed
+        </where>
+        <show>name,
+              common_names,
+              _issuer_organization_name,
+              serial,
+              valid_from,
+              valid_to,
+              #Detail:Detail:ElementWithDetail:.name as "Devices(s)"
+        </show>
+    </report>
+
+    <report name="Traversys.SSL.Lifecycle">
+        <title>SSL Certificate Lifecycle Status</title>
+        <description>Lifecycle Status for SSL Certificates</description>
+        <kind>Detail</kind>
+        <with>parseTime(time(valid_from)) as from,
+              parseTime(time(valid_to)) as to
+        </with>
+        <where>type = "SSL Certificate Detail"</where>
+        <show>name,
+              common_names,
+              valid_from,
+              valid_to,
+              ((@to &lt; currentTime() and 'Expired') or
+              (@to &lt; (currentTime() + 182 * 864000000000) and 'Expires in less than 6 months') or
+              (@to and 'Current') or 'No Data') as 'Lifecycle Status',
+              #Detail:Detail:ElementWithDetail:.name as 'Device(s)'
+        </show>
+    </report>
+
+    <report name="Traversys.getCert.Orphans">
+        <title>Orphan SSL Certificates</title>
+        <description>SSL Certificates not linked to a Host</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail"
+               and nodecount(traverse Detail:Detail:ElementWithDetail:) = 0
+        </where>
+        <show>name,
+              common_names,
+              _issuer_organization_name,
+              serial,
+              valid_from,
+              valid_to
+        </show>
+    </report>
+
+    <report name="Traversys.getCert.Warnings">
+        <title>SSL Certificate Warnings</title>
+        <description>SSL Certificates with cipher warnings</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail" and warnings</where>
+        <show>name,
+              single(#Detail:Detail:ElementWithDetail:.name) as 'Device Name',
+              single(kind(#Detail:Detail:ElementWithDetail:.#)) as 'Device Node',
+              single(#Detail:Detail:ElementWithDetail:.type) as 'Device Type',
+              _issuer_organization_name as "Issuer Name",
+              _subject_organization_name as "Subject Name",
+              valid_from,
+              valid_to,
+              ports,
+              least_strength,
+              warnings
+        </show>
+    </report>
+
+    <report name="Traversys.getCert.PKBits">
+        <title>SSL Certificates - Weak Public Keys</title>
+        <description>SSL Certificates with a weak public key (less than 2048 bits)</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail" and warnings
+               and _public_key_bits and toNumber(_public_key_bits) &lt; 2048</where>
+        <show>name,
+              single(#Detail:Detail:ElementWithDetail:.name) as 'Device Name',
+              single(kind(#Detail:Detail:ElementWithDetail:.#)) as 'Device Node',
+              single(#Detail:Detail:ElementWithDetail:.type) as 'Device Type',
+              _issuer_organization_name as "Issuer Name",
+              _subject_organization_name as "Subject Name",
+              valid_from,
+              valid_to,
+              ports,
+              least_strength,
+              warnings,
+              _public_key_bits as "Public Key Bits"
+        </show>
+    </report>
+
+    <report name="Traversys.getCert.AllPorts">
+        <title>All Listening Ports</title>
+        <description>All listening ports discovered</description>
+        <kind>DiscoveredListeningPort</kind>
+        <show>
+            local_port processwith unique(0)
+        </show>
+        <order-by>local_port</order-by>
+    </report>
+
+    <report name="Traversys.getCert.ListeningIPs">
+        <title>All Listening IP Addresses</title>
+        <description>All listening local IP addresses discovered</description>
+        <kind>DiscoveredListeningPort</kind>
+        <show>
+            local_ip_addr processwith unique(0)
+        </show>
+        <order-by>local_ip_addr</order-by>
+    </report>
+
+    <report name="Traversys.getCert.Subnets">
+        <title>List of Unique subnets</title>
+        <description>All unique subnets discovered</description>
+        <kind>Subnet</kind>
+        <show>
+             ip_address_range as "Subnets" processwith unique(0)
+        </show>
+        <order-by>ip_address_range</order-by>
+    </report>
+
+    <report name="Traversys.getCert.DeviceNames">
+        <title>List of Unique Device Names</title>
+        <description>List of device names gathered from heuristics</description>
+        <kind>DeviceInfo</kind>
+        <show>
+             fqdn as "Device FQDN" processwith unique(0)
+        </show>
+        <order-by>fqdn</order-by>
+    </report>
+
+    <report name="Traversys.getCert.DNSNames">
+        <title>List of Load Balancer Domain Names</title>
+        <description>List of domain names from discovered load balancers</description>
+        <kind>LoadBalancerService</kind>
+        <where>dns_names</where>
+        <show>
+             dns_names processwith unique(0)
+        </show>
+        <order-by>dns_names</order-by>
+    </report>
+
+    <report name="Traversys.getCert.WebAppAllPorts">
+        <title>All Web App Listening Ports</title>
+        <description>Web and Application server instances with listening ports</description>
+        <kind>DiscoveredListeningPort</kind>
+        <show>
+            local_port processwith unique(0)
+        </show>
+        <order-by>local_port</order-by>
+    </report>
+
+    <report name="Traversys.getCert.SSLPorts">
+        <title>SSL Certificate Ports</title>
+        <description>All ports discovered via SSL certificates</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail" and ports</where>
+        <show>
+            ports
+            processwith unique(0)
+        </show>
+        <order-by>ports</order-by>
+    </report>
+
+    <report name="Traversys.getCert.siCommunicationSummary">
+        <title>SI Communication Summary</title>
+        <description>Process all discovered SIs with siCommunicationSummary</description>
+        <kind>SoftwareInstance</kind>
+        <show>
+            processwith siCommunicationSummary()
+        </show>
+    </report>
+
+    <report name="Traversys.getCert.BAIs">
+        <title>Potentially Impacted BAIs</title>
+        <description>Business Application Instances potentially impacted by an SSL Certificate</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail"</where>
+        <show>
+            name,
+            valid_from,
+            valid_to,
+            #Detail:Detail:ElementWithDetail:Host.#Host:HostedSoftware:AggregateSoftware:BusinessApplicationInstance.type as 'Business Application Instance'
+        </show>
+    </report>
+
+    <!-- ################ REPORTS CHANNEL ############## -->
+
+    <report-channel name="Traversys.Channel.SSL_Certificates">
+        <title>getCert SSL Certificate Reports</title>
+        <description>SSL Certificate Reports</description>
+        <report>Traversys.SSL_Certificates</report>
+        <report indent="true">Traversys.SSL_Valid</report>
+        <report indent="true">Traversys.SSL_SelfSigned</report>
+        <report>Traversys.SSL.Lifecycle</report>
+        <report>Traversys.getCert.Orphans</report>
+    </report-channel>
+
+    <!-- ################ INSIGHT CHANNEL ############## -->
+
+    <report-channel name="Traversys.Channel.SSL_Certificates_Insight">
+        <title>getCert Discovery Insight</title>
+        <description>SSL Certificate Discovery Insight</description>
+        <report>Traversys.getCert.AllPorts</report>
+        <report indent="true">Traversys.getCert.WebAppAllPorts</report>
+        <report indent="true">Traversys.getCert.SSLPorts</report>
+        <report>Traversys.getCert.ListeningIPs</report>
+        <report>Traversys.getCert.Subnets</report>
+        <report>Traversys.getCert.DeviceNames</report>
+        <report>Traversys.getCert.DNSNames</report>
+        <report>Traversys.getCert.siCommunicationSummary</report>
+        <report></report>
+    </report-channel>
+
+    <!-- ################ SECURITY CHANNEL ############## -->
+
+    <report-channel name="Traversys.Channel.SSL_Certificates_Security">
+        <title>getCert Security Reports</title>
+        <description>SSL Certificate Security Reports</description>
+        <report>Traversys.getCert.Warnings</report>
+        <report>Traversys.getCert.PKBits</report>
+        <report>Traversys.getCert.BAIs</report>
+    </report-channel>
+
+    <!-- ################ CHARTS ############## -->
+
+    <chart-channel name="Traversys.getCert.Lifecycle" default="pie">
+        <title>SSL Certificate Lifecycle</title>
+        <description>Shows distribution of Lifecycle Status</description>
+        <kind>Detail</kind>
+        <with>parseTime(time(valid_from)) as from,
+              parseTime(time(valid_to)) as to
+        </with>
+        <where>type = "SSL Certificate Detail"</where>
+        <split>
+            (bin(@to - currentTime(),
+                [0,29*864000000000,91*864000000000],
+                ['Expired', 'Expires in less than 30 days','Expires in less than 3 months','Active']) OR 'No Data')
+        </split>
+        <show>name,
+              common_names,
+              valid_from,
+              valid_to,
+              ((@to &lt; currentTime() and 'Expired') or
+              (@to &lt; (currentTime() + 29 * 864000000000) and 'Expires in less than 30 days') or
+              (@to &lt; (currentTime() + 91 * 864000000000) and 'Expires in less than 3 months') or
+              (@to and 'Active') or 'No Data') as 'Lifecycle Status',
+              #Detail:Detail:ElementWithDetail:.name as 'Device(s)'
+        </show>
+        <order-by>valid_to</order-by>
+    </chart-channel>
+
+    <chart-channel name="Traversys.getCert.Signed" default="pie">
+        <title>SSL Certificate Signing Status</title>
+        <description>Shows status of self-signed versus CA signed</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail"</where>
+        <split>((self_signed and "Self Signed") or "CA Signed")</split>
+        <show>name,
+              common_names,
+              ((self_signed and "Self Signed") or "CA Signed") as "Signing Status"
+        </show>
+        <order-by>name</order-by>
+    </chart-channel>
+
+    <chart-channel name="Traversys.getCert.Issuers" default="column">
+        <title>SSL Certificate Signing Authorities</title>
+        <description>Signing authority of discovered SSL Certificates</description>
+        <kind>Detail</kind>
+        <where>type = "SSL Certificate Detail"</where>
+        <split>((self_signed and "Self Signed") or _issuer_organization_name)</split>
+        <show>
+        name,
+        common_names,
+        ((self_signed and "Self Signed") or _issuer_organization_name) as "Signing Authority"
+        </show>
+    </chart-channel>
+
+</reports>
