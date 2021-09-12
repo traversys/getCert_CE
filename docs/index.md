@@ -99,6 +99,7 @@ $ cd Traversys/getCert/
 ```console
 $ vi config.ini
 ```
+
 ```ini
 [ENV]
 root = /usr/tideway/data/customer/Traversys/getCert
