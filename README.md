@@ -23,3 +23,5 @@ Polls devices on a given IP range for SSL certificate details.
 2. Change permissions: `chomd 755 traversys_getcert.run`
 3. Run the installation: `./traversys_getcert.run`
 4. Follow on-screen instructions.
+
+Documentation: https://traversys.github.io/getCert_CE/

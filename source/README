@@ -1,5 +1,5 @@
-getCert v1.6
-(C) 2021 Traversys
+getCert
+(C) 2021 Traversys Limited
 
 The self-installer will deploy Traversys getCert extension
 files, automatically schedule the cron and upload the TPL.
@@ -25,28 +25,13 @@ data file.
 
 There are 3 modes you can use and are set in the config file:
 
-1 - Scan for SSL Certificates on the test ips/subnet string
-2 - Scan for a list of ips/subnets in the specified input file
-3 - Run the query (appliance login needed) to export a list of ips/subnets
+1 Scan for SSL Certificates on the test ips/subnet string
+2 Scan for a list of ips/subnets in the specified input file
+3 Run the query (appliance login needed) to export a list of ips/subnets
 
 You must enable appliance self-scanning in order to trigger discovery of the data file.
 
 You can set cron by specifying the schedule syntax in the config file then running cron.sh
 at any time.
 
-[MODE]
-1 = Test subnet
-2 = Input file
-3 = Run Query
-
-[DISCO_QUERY]
-Must result in a list of IPs or Subnet only
-
-[LOGIN]
-Escape characters using backslash e.g.: \! \<space>
-
-[CRON]
-Default=Every Saturday at 1AM
-
-[TIMEOUT]
-ms milliseconds, s seconds, m minues, h hours
+Documentation: https://traversys.github.io/getCert_CE/
