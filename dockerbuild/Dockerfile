@@ -11,7 +11,7 @@ yum -y install python27 && \
 yum -y install net-tools && \
 yum -y install openssh-server openssh-clients && \
 yum -y install python-pip
-RUN easy_install pyinstaller==3.6
+RUN pip install pyinstaller==3.6
 
 CMD ["/bin/bash"]
 
