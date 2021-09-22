@@ -3,7 +3,7 @@
 |     |     |
 | --- | --- |
 | License | Apache License 2.0 |
-| Version | 1.6 |
+| Version | 1.7.0 |
 
 Polls devices on a given IP range for SSL certificate details.
 

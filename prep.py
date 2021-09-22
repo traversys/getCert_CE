@@ -71,11 +71,11 @@ for b in binaries:
 
 ### Compile Binaries
 
-os.system("python -m py_compile %s/hide.py" % (makeself))
-hider = (makeself +  "/hide.pyc")
-if os.path.isfile(hider):
-    os.chmod(hider, 0o755)
-    shutil.copy2(hider,getcert + "/hide")
+#os.system("python3 -m py_compile %s/hide.py" % (makeself))
+#hider = (makeself +  "/hide.pyc")
+#if os.path.isfile(hider):
+#    os.chmod(hider, 0o755)
+#    shutil.copy2(hider,getcert + "/hide")
 
 os.chdir(makeself)
 
@@ -94,7 +94,7 @@ if os.path.exists(dist):
 
 os.system("makeself-2.4.0/makeself.sh --notemp ./Traversys ./traversys_getcert.run 'getCert SSL Certificate Discovery from Traversys' ./getCert/setup")
 
-with open(getcert + "/getcert") as gc:
+with open(getcert + "/getcert",'rb') as gc:
     data = gc.read()
     md5get = hashlib.md5(data).hexdigest()
     print("getcert MD5SUM: " + md5get + "\n")

@@ -27,19 +27,20 @@
 # 2020-03-29 : WMF : Added license key capability - performs a check for license file - if
 #                    If valid, removes the 100 cert limit
 # 2021-02-13 : WMF : Removed licence check for Open Source edition.
+# 2021-09-22 : WMF : Updated configparser import for Python3 compatibility.
 #
 
 import os
 import sys
 import re
 import fileinput
-import ConfigParser
+import configparser
 import datetime
 import base64
 import hashlib
 import shutil
 
-config = ConfigParser.ConfigParser()
+config = configparser.ConfigParser()
 
 # Read config file
 cfexists = os.path.isfile('config.ini')

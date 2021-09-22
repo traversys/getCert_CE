@@ -20,7 +20,7 @@
 # Setup script for Traversys getCert
 #
 
-import ConfigParser
+import configparser
 import socket
 import os
 import getpass
@@ -28,6 +28,7 @@ import re
 import signal
 import subprocess
 import time
+import sys
 
 def cleanup(root):
     os.remove(root + "/Traversys_getCert_Functions.tpl")
@@ -41,7 +42,7 @@ hold = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 ### Read and Update Config ###
 
-config = ConfigParser.ConfigParser()
+config = configparser.ConfigParser()
 
 ### Setup root dir ###
 
@@ -86,7 +87,7 @@ tplfile.close()
 ### Start Warning ###
 
 print("This install will temporily halt and reboot appliance services, do you want to continue?")
-yep = raw_input('Enter "Y" to continue: ').lower().strip()
+yep = input('Enter "Y" to continue: ').lower().strip()
 if not yep == 'y':
     print("Cleaning up, please run the install script again when ready.")
     cleanup(root)
@@ -94,7 +95,7 @@ if not yep == 'y':
 
 ### Obtain Login Details ###
 
-login = raw_input('Please enter your appliance login: ')
+login = input('Please enter your appliance login: ')
 if not login:
     print("ERROR: You must enter a system user login! Please run the install script again.")
     cleanup(root)

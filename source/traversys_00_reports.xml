@@ -197,11 +197,16 @@
     </report>
 
     <report name="Traversys.getCert.WebAppAllPorts">
-        <title>All Web App Listening Ports</title>
-        <description>Web and Application server instances with listening ports</description>
-        <kind>DiscoveredListeningPort</kind>
+        <title>All Software Listening Ports</title>
+        <description>Web and Application software instances with listening ports</description>
+        <kind>
+            flags(no_segment)
+            SoftwareInstance, CandidateSoftwareInstance
+            traverse InferredElement:Inference::DiscoveredProcess
+        </kind>
         <show>
-            local_port processwith unique(0)
+            processwith communicationForProcesses(2,"local_port")
+            processwith unique()
         </show>
         <order-by>local_port</order-by>
     </report>

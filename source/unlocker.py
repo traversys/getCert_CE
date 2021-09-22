@@ -22,13 +22,14 @@
 # Change History:
 # 2020-04-14 : WMF : Unlocker file for multi-tasking.
 # 2021-02-13 : WMF : Updated integrity check.
+# 2021-09-22 : WMF : Updated configparser import for Python3 compatibility.
 #
 
 import os
 import sys
-import ConfigParser
+import configparser
 
-config = ConfigParser.ConfigParser()
+config = configparser.ConfigParser()
 
 #os.chdir(os.path.dirname(sys.argv[0]))
 

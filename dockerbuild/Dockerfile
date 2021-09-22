@@ -7,10 +7,13 @@ RUN yum clean all
 RUN yum -y --enablerepo=extras install epel-release && \
 yum -y install centos-release-scl && \
 yum -y install nmap && \
-yum -y install python27 && \
+yum -y install python3 && \
 yum -y install net-tools && \
 yum -y install openssh-server openssh-clients && \
-yum -y install python-pip
+yum -y install python3-pip && \
+yum -y install wheel && \
+yum -y install zlib-devel && \
+yum -y groupinstall "Development Tools"
 RUN pip install pyinstaller==3.6
 
 CMD ["/bin/bash"]
