@@ -132,3 +132,4 @@ licenses/
 *.run
 makeself/*.py
 makeself/Traversys/
+*.zip
