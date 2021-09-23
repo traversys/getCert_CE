@@ -22,7 +22,7 @@ end metadata;
 
 //// Remove Import lines to make changes ////
 from Traversys_SSL_getCert_Functions import traversysGlobalDefs 1.6;
-from Traversys_SSL_getCert_Config import traversysConfig 1.2, Traversys_getCert_Config 1.0;
+from Traversys_SSL_getCert_Main import traversysConfig 1.2, Traversys_getCert_Config 1.0;
 /////////////////////////////////////////////
 
 definitions traversysGetCert 1.3
@@ -79,7 +79,7 @@ definitions traversysGetCert 1.3
 end definitions;
 
 
-pattern Traversys_getCert 1.4
+pattern Traversys_getCert 1.5
     '''
     Traversys getCert Main Body
 
@@ -95,6 +95,7 @@ pattern Traversys_getCert 1.4
     2020-04-13 1.3  WMF  :  Added removal groups, new method to capture serial
                             number and other details.
     2021-02-13 1.4 WMF   :  Removed licensing requirements for Open Source Edition.
+    2021-09-23 1.5 WMF   :  Updated attributes to match BMC TKU certificate details.
 
     You may copy and modify this to generate your own SSL Certificate model.
 
@@ -108,7 +109,7 @@ pattern Traversys_getCert 1.4
     end overview;
 
     constants
-        type:="SSL Certificate Detail";
+        type:="SSL Certificate";
     end constants;
 
     triggers
@@ -176,8 +177,9 @@ pattern Traversys_getCert 1.4
                 iss:= "commonName=%iss_cname%; countryName=%iss_country%; stateOrProvinceName=%iss_state%; localityName=%iss_locality%; organizationName=%iss_orgname%; organizationalUnitName=%iss_orgunit%; emailAddress=%iss_email%;";
 
                 sha:=traversysGetCert.xValue(xdoc,root_xml+'/script/[@key="sha1"]/text()');
-                pubkeytype:=traversysGetCert.xValue(xdoc,root_xml+'/script/table/elem[@key="type"]/text()');
-                pubkeybits:=traversysGetCert.xValue(xdoc,root_xml+'/script/table/elem[@key="bits"]/text()');
+                pubkeytype:=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="pubkey"]/elem[@key="type"]/text()');
+                pubkeybits:=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="pubkey"]/elem[@key="bits"]/text()');
+                subaltname:=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="extensions"]/table[elem/text()="X509v3 Subject Alternative Name"]/elem[@key="value"]/text()');
                 notbefore:=traversysGetCert.xValue(xdoc,root_xml+'/script/table/elem[@key="notBefore"]/text()');
                 date:= regex.extract(notbefore, regex "((\d+-?)+)T", raw "\1");
                 dtime:= regex.extract(notbefore, regex "T((\d+:?)+)", raw "\1");
@@ -206,7 +208,7 @@ pattern Traversys_getCert 1.4
                 // Additional Info
                 serial:= none;
                 errors:= none;
-                self_signed:= none;
+                self_signed:= false;
 
                 scan_cmd:= "%traversysConfig.install_dir%/unlocker --ssl ";
 
@@ -256,10 +258,18 @@ pattern Traversys_getCert 1.4
                                      type                       := type,
                                      valid_from                 := valid_from,
                                      valid_to                   := valid_to,
+                                     start_date                 := valid_from, // BMC TKU Value
+                                     expiry_date                := valid_to, // BMC TKU Value
                                      common_names               := common_names,
+                                     common_name                := sub_cname, // BMC TKU Value
+                                     short_name                 := sub_cname, // BMC TKU Value
                                      rsa_encryption             := re,
+                                     sha_1_fingerprint          := sha, // BMC TKU Value - SHA256, can only be retrieved with OpenSSL
                                      subject                    := sub,
                                      issuer                     := iss,
+                                     organization               := sub_orgname, // BMC TKU Value
+                                     organization_unit          := sub_orgunit, // BMC TKU Value
+                                     subject_alternative_name   := subaltname, // BMC TKU Value
                                      ports                      := ports,
                                      all_ip_addresses           := ips,
                                      connections                := connections,

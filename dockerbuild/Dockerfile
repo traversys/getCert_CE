@@ -11,10 +11,10 @@ yum -y install python3 && \
 yum -y install net-tools && \
 yum -y install openssh-server openssh-clients && \
 yum -y install python3-pip && \
-yum -y install wheel && \
 yum -y install zlib-devel && \
 yum -y groupinstall "Development Tools"
-RUN pip install pyinstaller==3.6
+RUN pip3 install pyinstaller==3.6
+RUN pip3 install wheel
 
 CMD ["/bin/bash"]
 

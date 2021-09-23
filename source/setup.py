@@ -32,7 +32,7 @@ import sys
 
 def cleanup(root):
     os.remove(root + "/Traversys_getCert_Functions.tpl")
-    os.remove(root + "/Traversys_getCert_Config.tpl")
+    os.remove(root + "/Traversys_getCert_Main.tpl")
     os.remove(root + "/Traversys_getCert.tpl")
 
 os.system('clear')
@@ -78,7 +78,7 @@ version = re.search("^(\d+)\.", os.environ['ADDM_VERSION']).group(1)
 
 ### Update TPL file ###
 
-tplfile = open(root + "/Traversys_getCert_Config.tpl").read()
+tplfile = open(root + "/Traversys_getCert_Main.tpl").read()
 newtpl = re.sub(r'install_dir := ~INSTALLDIR~;', 'install_dir := \'%s\';' % (root), tplfile)
 tplfile = open(root + "/Traversys_getCert_Config.tpl", 'w')
 tplfile.write(newtpl)

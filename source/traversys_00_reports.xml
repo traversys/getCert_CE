@@ -24,13 +24,13 @@
         <title>SSL Certificates</title>
         <description>Discovered SSL Certificates</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail"</where>
+        <where>type = "SSL Certificate" or type = "TLS Certificate"</where>
         <show>name,
               common_names,
               _issuer_organization_name,
               serial,
-              valid_from,
-              valid_to,
+              start_date,
+              expiry_date,
               self_signed,
               #Detail:Detail:ElementWithDetail:.name as "Devices(s)"
         </show>
@@ -40,15 +40,15 @@
         <title>SSL Certificates - Self Signed</title>
         <description>Self Signed SSL Certificates</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail"
+        <where>(type = "SSL Certificate" or type = "TLS Certificate")
                and self_signed
         </where>
         <show>name,
               common_names,
               _issuer_organization_name,
               serial,
-              valid_from,
-              valid_to,
+              start_date,
+              expiry_date,
               #Detail:Detail:ElementWithDetail:.name as "Devices(s)"
         </show>
     </report>
@@ -57,15 +57,15 @@
         <title>SSL Certificates - CA Signed</title>
         <description>SSL Certificates signed by a Certificate Authority</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail"
+        <where>(type = "SSL Certificate" or type = "TLS Certificate")
                and not self_signed
         </where>
         <show>name,
               common_names,
               _issuer_organization_name,
               serial,
-              valid_from,
-              valid_to,
+              start_date,
+              expiry_date,
               #Detail:Detail:ElementWithDetail:.name as "Devices(s)"
         </show>
     </report>
@@ -74,14 +74,14 @@
         <title>SSL Certificate Lifecycle Status</title>
         <description>Lifecycle Status for SSL Certificates</description>
         <kind>Detail</kind>
-        <with>parseTime(time(valid_from)) as from,
-              parseTime(time(valid_to)) as to
+        <with>parseTime(time(start_date)) as from,
+              parseTime(time(expiry_date)) as to
         </with>
-        <where>type = "SSL Certificate Detail"</where>
+        <where>type = "SSL Certificate" or type = "TLS Certificate"</where>
         <show>name,
               common_names,
-              valid_from,
-              valid_to,
+              start_date,
+              expiry_date,
               ((@to &lt; currentTime() and 'Expired') or
               (@to &lt; (currentTime() + 182 * 864000000000) and 'Expires in less than 6 months') or
               (@to and 'Current') or 'No Data') as 'Lifecycle Status',
@@ -93,15 +93,15 @@
         <title>Orphan SSL Certificates</title>
         <description>SSL Certificates not linked to a Host</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail"
+        <where>type = "SSL Certificate"
                and nodecount(traverse Detail:Detail:ElementWithDetail:) = 0
         </where>
         <show>name,
               common_names,
               _issuer_organization_name,
               serial,
-              valid_from,
-              valid_to
+              start_date,
+              expiry_date,
         </show>
     </report>
 
@@ -109,15 +109,15 @@
         <title>SSL Certificate Warnings</title>
         <description>SSL Certificates with cipher warnings</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail" and warnings</where>
+        <where>(type = "SSL Certificate" or type = "TLS Certificate") and warnings</where>
         <show>name,
               single(#Detail:Detail:ElementWithDetail:.name) as 'Device Name',
               single(kind(#Detail:Detail:ElementWithDetail:.#)) as 'Device Node',
               single(#Detail:Detail:ElementWithDetail:.type) as 'Device Type',
               _issuer_organization_name as "Issuer Name",
               _subject_organization_name as "Subject Name",
-              valid_from,
-              valid_to,
+              start_date,
+              expiry_date,
               ports,
               least_strength,
               warnings
@@ -128,7 +128,7 @@
         <title>SSL Certificates - Weak Public Keys</title>
         <description>SSL Certificates with a weak public key (less than 2048 bits)</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail" and warnings
+        <where>(type = "SSL Certificate" or type = "TLS Certificate") and warnings
                and _public_key_bits and toNumber(_public_key_bits) &lt; 2048</where>
         <show>name,
               single(#Detail:Detail:ElementWithDetail:.name) as 'Device Name',
@@ -136,8 +136,8 @@
               single(#Detail:Detail:ElementWithDetail:.type) as 'Device Type',
               _issuer_organization_name as "Issuer Name",
               _subject_organization_name as "Subject Name",
-              valid_from,
-              valid_to,
+              start_date,
+              expiry_date,
               ports,
               least_strength,
               warnings,
@@ -215,7 +215,7 @@
         <title>SSL Certificate Ports</title>
         <description>All ports discovered via SSL certificates</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail" and ports</where>
+        <where>(type = "SSL Certificate" or type = "TLS Certificate") and ports</where>
         <show>
             ports
             processwith unique(0)
@@ -236,11 +236,11 @@
         <title>Potentially Impacted BAIs</title>
         <description>Business Application Instances potentially impacted by an SSL Certificate</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail"</where>
+        <where>type = "SSL Certificate" or type = "TLS Certificate"</where>
         <show>
             name,
-            valid_from,
-            valid_to,
+            start_date,
+            expiry_date,
             #Detail:Detail:ElementWithDetail:Host.#Host:HostedSoftware:AggregateSoftware:BusinessApplicationInstance.type as 'Business Application Instance'
         </show>
     </report>
@@ -289,10 +289,10 @@
         <title>SSL Certificate Lifecycle</title>
         <description>Shows distribution of Lifecycle Status</description>
         <kind>Detail</kind>
-        <with>parseTime(time(valid_from)) as from,
-              parseTime(time(valid_to)) as to
+        <with>parseTime(time(start_date)) as from,
+              parseTime(time(expiry_date)) as to
         </with>
-        <where>type = "SSL Certificate Detail"</where>
+        <where>type = "SSL Certificate" or type = "TLS Certificate"</where>
         <split>
             (bin(@to - currentTime(),
                 [0,29*864000000000,91*864000000000],
@@ -300,8 +300,8 @@
         </split>
         <show>name,
               common_names,
-              valid_from,
-              valid_to,
+              start_date,
+              expiry_date,
               ((@to &lt; currentTime() and 'Expired') or
               (@to &lt; (currentTime() + 29 * 864000000000) and 'Expires in less than 30 days') or
               (@to &lt; (currentTime() + 91 * 864000000000) and 'Expires in less than 3 months') or
@@ -315,7 +315,7 @@
         <title>SSL Certificate Signing Status</title>
         <description>Shows status of self-signed versus CA signed</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail"</where>
+        <where>type = "SSL Certificate" or type = "TLS Certificate"</where>
         <split>((self_signed and "Self Signed") or "CA Signed")</split>
         <show>name,
               common_names,
@@ -328,7 +328,7 @@
         <title>SSL Certificate Signing Authorities</title>
         <description>Signing authority of discovered SSL Certificates</description>
         <kind>Detail</kind>
-        <where>type = "SSL Certificate Detail"</where>
+        <where>type = "SSL Certificate" or type = "TLS Certificate"</where>
         <split>((self_signed and "Self Signed") or _issuer_organization_name)</split>
         <show>
         name,

@@ -133,3 +133,5 @@ licenses/
 makeself/*.py
 makeself/Traversys/
 *.zip
+source/BMC_CMDB_TLS_Document.tpl
+source/BMC_SSLDiscovery.tpl
