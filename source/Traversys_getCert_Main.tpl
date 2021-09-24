@@ -25,7 +25,7 @@ configuration traversysConfig 1.2
 
     "Attempt to map SSL Certificates using Common Name?"      map_name            := true;
 
-    "Set Removal Group?"                                      rem_group           := false;
+    "Set Removal Group?"                                      rem_group           := true;
 
     "Infer File node?"                                        file                := true;
 

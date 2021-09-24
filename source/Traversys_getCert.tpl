@@ -95,7 +95,9 @@ pattern Traversys_getCert 1.5
     2020-04-13 1.3  WMF  :  Added removal groups, new method to capture serial
                             number and other details.
     2021-02-13 1.4 WMF   :  Removed licensing requirements for Open Source Edition.
-    2021-09-23 1.5 WMF   :  Updated attributes to match BMC TKU certificate details.
+    2021-09-24 1.5 WMF   :  Updated attributes to match BMC TKU certificate details.
+                            Migrated to SofwareInstance link. Will generate new SI
+                            if missing.
 
     You may copy and modify this to generate your own SSL Certificate model.
 
@@ -310,19 +312,118 @@ pattern Traversys_getCert 1.5
                     cd.self_signed:= self_signed;
                 end if;
 
-                if traversysConfig.map_device then
-                    // Search for a host with the IP, if it exists, map the detail to the host
-                    for dev in dev_ips do
-                        dt:=model.rel.Detail(ElementWithDetail:=dev, Detail:=cd);
-                    end for;
-                end if;
+                // Attempt to map to SoftwareInstances
+                devices := [];
+                for dev in dev_ips do
+                    list.append(devices,dev);
+                end for;
 
-                if traversysConfig.map_name then
-                    // Search for a host common name
-                    for dev in dev_cns do
-                        dt:=model.rel.Detail(ElementWithDetail:=dev, Detail:=cd);
-                    end for;
-                end if;
+                for dev in dev_cns do
+                    list.append(devices,dev);
+                end for;
+
+                sis_with_ports:= [];
+                for port in ports do
+                    portn:= text.toNumber(port);
+                    // Lookup SIs direct - quick win
+                    log.debug("Looking for SIs with Port %port%...");
+                    dev_sis:= search(in devices traverse Host:HostedSoftware::SoftwareInstance where port = %portn%);
+                    si_count:= size(dev_sis);
+                    log.debug("Device SIs found %si_count%");
+                    can_sis:= search(in devices traverse Host:HostedSoftware:RunningSoftware:CandidateSoftwareInstance where port = %portn%);
+                    if size(dev_sis) > 0 or size(can_sis) > 0 then
+                        log.debug("Found SIs with Port %port%");
+                        for si in dev_sis do
+                            log.debug("SI: %si.name%");
+                            list.append(sis_with_ports,si);
+                        end for;
+                        for si in can_sis do
+                            log.debug("Candidate SI: %si.name%");
+                            list.append(sis_with_ports,si);
+                        end for;
+                    else
+                        // Get process from inferred nodes
+                        log.debug("Looking for listening port %port%");
+                        related_ports:= search(in devices
+                                                traverse InferredElement:Inference:Associate:DiscoveryAccess
+                                                    traverse DiscoveryAccess:DiscoveryAccessResult:DiscoveryResult:NetworkConnectionList
+                                                        traverse List:List:Member:DiscoveredListeningPort);
+                        for rel_port in related_ports do
+                            log.debug("Checking port %rel_port.local_port%");
+                            if portn = rel_port.local_port then
+                                log.debug("Listening port %port% found");
+                                related_procs:= search(in rel_port processwith processesForCommunication());
+                                for rel_proc in related_procs do
+                                    log.debug("Looking for related SIs on %port%");
+                                    related_sis:= search(in rel_proc traverse :Inference:InferredElement:SoftwareInstance);
+                                    related_csis:= search(in rel_proc traverse Associate:Inference:InferredElement:CandidateSoftwareInstance);
+                                    if size(related_sis) > 0 or size(related_csis) > 0 then
+                                        log.debug("Found related SIs on %port%");
+                                        for si in related_sis do
+                                            list.append(sis_with_ports,si);
+                                        end for;
+                                        for si in related_csis do
+                                            list.append(sis_with_ports,si);
+                                        end for;
+                                    else
+                                        log.debug("No related SIs for %port%, generating new SI...");
+                                        newType:= regex.extract(rel_proc.cmd, regex "\b(\S+(\.exe))?$", raw "\1");
+                                        da:= discovery.access(rel_proc);
+                                        host:= related.host(da);
+                                        newSI := model.SoftwareInstance(key:= key,
+                                                                        type:= newType,
+                                                                        name:= "%newType% on %host.name%",
+                                                                        port:= portn
+                                                                        );
+                                        log.info("New SI created %newSI.name%...");
+                                        model.rel.HostedSoftware(Host := host, RunningSoftware := newSI);
+                                        list.append(sis_with_ports,newSI);
+                                    end if;
+                                end for;
+                            end if;
+                        end for;
+                    end if;
+
+                    if size(sis_with_ports) > 0 then
+                        log.debug("Linking certificate to SI...");
+                        for si in dev_sis do
+                            log.debug("%si.name%");
+                            model.rel.Detail(ElementWithDetail := si, Detail := cd);
+                        end for;
+                    else
+                        for device in devices do
+                            log.debug("No related SIs for %port%, generating new SI...");
+                            newType:= sub_cname;
+                            host:= device;
+                            newSI := model.SoftwareInstance(key:= key,
+                                                            type:= newType,
+                                                            name:= "%newType% on %host.name%",
+                                                            port:= portn
+                                                            );
+                            log.info("New SI created %newSI.name%...");
+                            model.rel.Detail(ElementWithDetail := newSI, Detail := cd);
+                            model.rel.HostedSoftware(Host := device, RunningSoftware := newSI);
+                        end for;
+                    end if;
+
+                end for;
+
+                // Map to Devices inc. Load Balancers
+                // TBA
+
+                // if traversysConfig.map_device then
+                //     // Search for a host with the IP, if it exists, map the detail to the host
+                //     for dev in dev_ips do
+                //         dt:=model.rel.Detail(ElementWithDetail:=dev, Detail:=cd);
+                //     end for;
+                // end if;
+
+                // if traversysConfig.map_name then
+                //     // Search for a host common name
+                //     for dev in dev_cns do
+                //         dt:=model.rel.Detail(ElementWithDetail:=dev, Detail:=cd);
+                //     end for;
+                // end if;
 
             end for;
 
