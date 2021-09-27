@@ -91,7 +91,7 @@
 
     <report name="Traversys.getCert.Orphans">
         <title>Orphan SSL Certificates</title>
-        <description>SSL Certificates not linked to a Host</description>
+        <description>SSL Certificates not linked to a device</description>
         <kind>Detail</kind>
         <where>type = "SSL Certificate"
                and nodecount(traverse Detail:Detail:ElementWithDetail:) = 0
@@ -101,7 +101,7 @@
               _issuer_organization_name,
               serial,
               start_date,
-              expiry_date,
+              expiry_date
         </show>
     </report>
 

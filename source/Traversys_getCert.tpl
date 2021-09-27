@@ -401,29 +401,16 @@ pattern Traversys_getCert 1.5
                                                             port:= portn
                                                             );
                             log.info("New SI created %newSI.name%...");
-                            model.rel.Detail(ElementWithDetail := newSI, Detail := cd);
-                            model.rel.HostedSoftware(Host := device, RunningSoftware := newSI);
+                            if model.kind(device.type = "Host") then
+                                model.rel.Detail(ElementWithDetail := newSI, Detail := cd);
+                                model.rel.HostedSoftware(Host := device, RunningSoftware := newSI);
+                            else // Attach to the device itself
+                                dt:=model.rel.Detail(ElementWithDetail:=device, Detail:=cd);
+                            end if;
                         end for;
                     end if;
 
                 end for;
-
-                // Map to Devices inc. Load Balancers
-                // TBA
-
-                // if traversysConfig.map_device then
-                //     // Search for a host with the IP, if it exists, map the detail to the host
-                //     for dev in dev_ips do
-                //         dt:=model.rel.Detail(ElementWithDetail:=dev, Detail:=cd);
-                //     end for;
-                // end if;
-
-                // if traversysConfig.map_name then
-                //     // Search for a host common name
-                //     for dev in dev_cns do
-                //         dt:=model.rel.Detail(ElementWithDetail:=dev, Detail:=cd);
-                //     end for;
-                // end if;
 
             end for;
 
