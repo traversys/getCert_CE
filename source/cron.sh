@@ -10,7 +10,7 @@ if [ "$TIDEWAY" == "" ]; then
 fi
 . $TIDEWAY/tw_setup
 
-echo "$cron $root/get" >> traversys_getCert.cron
+echo "$cron $root/getcert" >> traversys_getCert.cron
 mv traversys_getCert.cron /usr/tideway/etc/cron/
 tw_cron_update
 echo ""
