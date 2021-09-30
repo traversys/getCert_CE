@@ -23,14 +23,14 @@
 # Python Built-in
 import os
 import sys
-import shutil
-import glob
-import stat
-import hashlib
 import logging
 import datetime
 import getpass
 import platform
+import secrets
+import re
+import configparser
+import py_compile
 
 # Pip modules
 import tideway
@@ -59,8 +59,13 @@ def api_version(tw):
         return(about, version)
 
 logfile = 'install_%s.log' % ( str(datetime.date.today()))
-logging.basicConfig(level=logging.INFO, filename=logfile, filemode='w',force=True)
+logging.basicConfig(level=logging.INFO, filename=logfile, filemode='w')
 logger = logging.getLogger("getCert Installation")
+
+pwd = os.getcwd()
+libdir = (pwd + "/lib")
+tpldir = (pwd + "/tpl")
+ini = (pwd + "/config.ini")
 
 os.system('clear')
 
@@ -71,7 +76,9 @@ if not instance:
     logger.critical(msg)
     sys.exit(1)
 
-token = getpass.getpass(prompt='Please enter your Discovery API token: ')
+## Get Discovery credential
+
+token = input('Please enter your Discovery API token: ')
 if not token:
     msg = "No token supplied! Please run the install script again."
     print(msg)
@@ -123,92 +130,88 @@ if apiver:
 else:
     disco = tideway.appliance(instance,token)
 
+## Generate Passphrase
+
+phrase = getpass.getpass(prompt='Set a GPG passphrase (or leave it blank for randomly generated one): ')
+if not phrase:
+    phrase = secrets.token_hex(32)
+    print("You randomly generated passphrase is:",phrase)
+    print("Store this safely, if you lose it you will have to commission a fresh installation.")
+
+## Commission a lock file
+
+pfile= libdir+"/."+instance.replace(".","_")
+f=open(pfile, 'w')
+f.write(token)
+f.close()
+vault = libdir+"/"+instance.replace(".","_")
+msg = "Lock file commissioned: %s"%vault
+logger.info(msg)
+os.system('echo "%s" | gpg --yes --batch --quiet --passphrase-fd 0 -o %s -c %s' % (phrase, vault, pfile))
+os.remove(pfile)
+
+## Commission the key file
+
+kfile= libdir+"/"+instance.replace(".","_")+".py"
+f=open(kfile, 'w')
+f.write("passphrase = '%s'"%phrase)
+f.close()
+msg = "Key file commissioned: %s"%kfile
+logger.info(msg)
+py_compile.compile(kfile)
+os.remove(kfile)
+
+## Read and Update Config
+
+config = configparser.ConfigParser()
+config.read(ini)
+config.set('ENV', 'root', pwd)
+with open(ini, 'w') as configfile:
+    config.write(configfile)
+    msg = "Config file updated with root: %s"%pwd
+    logger.info(msg)
+
+root = config.get('ENV', 'root')
+logger.debug(root)
+
+## Update TPL file
+
+tplfile = open(tpldir + "/Traversys_getCert_Main.tpl").read()
+msg = "Updating %s/Traversys_getCert_Main.tpl"%tpldir
+logger.info(msg)
+newtpl = re.sub(r'install_dir := ~INSTALLDIR~;', 'install_dir := \'%s\';' % (root), tplfile)
+#tplfile = open(tpldir + "/Traversys_getCert_Main.tpl", 'w')
+tplfile = open(tpldir + "/Traversys_getCert_Main_updated.tpl", 'w')
+tplfile.write(newtpl)
+tplfile.close()
+
+## Deploy TPL
+
 try:
-    twvault = disco.vault()
+    ku = disco.knowledge()
+    msg = "Connected to Discovery Knowledge endpoint."
+    logger.info(msg)
 except:
-    msg = "Error getting Valut from %s\n" % (instance)
+    msg = "Error getting Knowledge from %s\n" % (instance)
     print(msg)
     logger.error(msg)
     sys.exit(1)
 
-## Get Discovery credential
+data = disco.data()
+results = data.search("search Host")
+print(results.ok)
+print(results.content)
 
-## Store in encrypted file
+cg_Functions = ku.uploadKnowledge("getCert Functions","%s/Traversys_getCert_Functions.tpl"%tpldir)
+print(cg_Functions.ok)
+print(cg_Functions.content)
+ku.uploadKnowledge("getCert Main","%s/Traversys_getCert_Main.tpl"%tpldir)
+ku.uploadKnowledge("getCert","%s/Traversys_getCert.tpl"%tpldir)
+ku.uploadKnowledge("getCert CMDB","%s/Traversys_getCert_CMDB_SI.tpl"%tpldir)
+msg = "getCert Knowledge files uploaded."
+logger.info(msg)
 
-## Set tpl install location
-
-## Upload to Discovery
-
-pwd = os.getcwd()
-source = (pwd)
-makeself = (pwd + "/makeself")
-getcert = (makeself + "/Traversys/getCert")
-dist = (makeself + "/dist")
-
-if not os.path.exists(getcert):
-    os.makedirs(getcert)
-
-binaries = [ "*.py" ]
-files = [ "*.tpl", "*.ini", "*.sh", "*.txt", "*.xml", "*.cron", "*.dash" ]
-pys = [ "getcert.py", "unlocker.py", "license_check.py", "setup.py" ]
-
-os.system('clear')
-
-### Copy over source files
-
-license = (source + "/LICENSE")
-readme = (source + "/README")
-version = (source +  "/VERSION")
-
-if os.path.isfile(license):
-    shutil.copy2(license,getcert)
-
-if os.path.isfile(readme):
-    shutil.copy2(readme,getcert)
-
-if os.path.isfile(version):
-    shutil.copy2(version,getcert)
-
-for f in files:
-    source_files = glob.iglob(os.path.join(source, f))
-    for sf in source_files:
-        if os.path.isfile(sf):
-            shutil.copy2(sf,getcert)
-
-for b in binaries:
-    bin_files = glob.iglob(os.path.join(source, b))
-    for bf in bin_files:
-        if os.path.isfile(bf):
-            shutil.copy2(bf,makeself)
-
-### Compile Binaries
-
-#os.system("python3 -m py_compile %s/hide.py" % (makeself))
-#hider = (makeself +  "/hide.pyc")
-#if os.path.isfile(hider):
-#    os.chmod(hider, 0o755)
-#    shutil.copy2(hider,getcert + "/hide")
-
-os.chdir(makeself)
-
-for p in pys:
-    py_file = (makeself +  "/" + p)
-    if os.path.isfile(py_file):
-       os.system("pyinstaller --onefile %s" % (py_file))
-
-if os.path.exists(dist):
-    bin_pys = glob.iglob(os.path.join(dist, "*"))
-    for bf in bin_pys:
-        if os.path.isfile(bf):
-            shutil.copy2(bf,getcert)
-
-### Compile Distributable Binary
-
-os.system("makeself-2.4.0/makeself.sh --notemp ./Traversys ./traversys_getcert.run 'getCert SSL Certificate Discovery from Traversys' ./getCert/setup")
-
-with open(getcert + "/getcert",'rb') as gc:
-    data = gc.read()
-    md5get = hashlib.md5(data).hexdigest()
-    print("getcert MD5SUM: " + md5get + "\n")
+print("Patterns uploaded!")
+print("You can set the cronjob with the 'cron.sh' script\n")
 
 sys.exit(0)
