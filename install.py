@@ -31,6 +31,7 @@ import secrets
 import re
 import configparser
 import py_compile
+import time
 
 # Pip modules
 import tideway
@@ -57,6 +58,46 @@ def api_version(tw):
     if about.ok:
         version = about.json()['api_versions'][-1]
         return(about, version)
+
+def upload(disco, pattern_name, tpl_path):
+    pattern_file = "%s/%s"%(tpl_path,pattern_name)
+    disco.uploadKnowledge(pattern_name,pattern_file)
+    success = False
+    while True:
+        status = disco.getUploadStatus()
+        if status.ok:
+            if status.json()["processing"] == False:
+                if status.json()["last_result"] == "success":
+                    msg = "%s uploaded succesfully."%pattern_name
+                    print(msg)
+                    logger.info(msg)
+                    success = True
+                    break
+                elif status.json()["last_result"] == "failure":
+                    msg = "%s Upload failed.\n%s"%(pattern_name,status.json()["error"])
+                    print(msg)
+                    logger.error(msg)
+                    break
+                else:
+                    msg = "There was some problem %s upload.\n%s\n%s"%(pattern_name,status.json()["last_result"],status.json()["messages"])
+                    print(msg)
+                    logger.error(msg)
+                    break
+        else:
+            msg = "There was some problem attempting to get Knowledge Upload status.\n%s"%status
+            print(msg)
+            logger.error(msg)
+            break
+        print("Uploading %s."%pattern_name,end='\r')
+        time.sleep(0.5)
+        print("Uploading %s.."%pattern_name,end='\r')
+        time.sleep(0.5)
+        print("Uploading %s..."%pattern_name,end='\r')
+        time.sleep(0.5)
+        print("Uploading %s   "%pattern_name,end='\r')
+        time.sleep(0.5)
+        success = False
+    return success
 
 logfile = 'install_%s.log' % ( str(datetime.date.today()))
 logging.basicConfig(level=logging.INFO, filename=logfile, filemode='w')
@@ -197,21 +238,21 @@ except:
     logger.error(msg)
     sys.exit(1)
 
-data = disco.data()
-results = data.search("search Host")
-print(results.ok)
-print(results.content)
+success = upload(ku, "Traversys_getCert_Functions.tpl", tpldir)
+if success:
+    success = upload(ku, "Traversys_getCert_Main.tpl", tpldir)
+if success:
+    success = upload(ku, "Traversys_getCert.tpl", tpldir)
+if success:
+    success = upload(ku, "Traversys_getCert_CMDB_SI.tpl", tpldir)
 
-cg_Functions = ku.uploadKnowledge("getCert Functions","%s/Traversys_getCert_Functions.tpl"%tpldir)
-print(cg_Functions.ok)
-print(cg_Functions.content)
-ku.uploadKnowledge("getCert Main","%s/Traversys_getCert_Main.tpl"%tpldir)
-ku.uploadKnowledge("getCert","%s/Traversys_getCert.tpl"%tpldir)
-ku.uploadKnowledge("getCert CMDB","%s/Traversys_getCert_CMDB_SI.tpl"%tpldir)
-msg = "getCert Knowledge files uploaded."
-logger.info(msg)
-
-print("Patterns uploaded!")
-print("You can set the cronjob with the 'cron.sh' script\n")
+if success:
+    msg = "Uploads complete!"
+    print(msg)
+    logger.info(msg)
+    print("You can set the cronjob with the 'cron.sh' script\n")
+else:
+    msg = "Error: There was some problem with the TPL uploads, consult the log file"
+    print(msg)
 
 sys.exit(0)
