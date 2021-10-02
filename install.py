@@ -176,7 +176,7 @@ else:
 phrase = getpass.getpass(prompt='Set a GPG passphrase (or leave it blank for randomly generated one): ')
 if not phrase:
     phrase = secrets.token_hex(32)
-    print("You randomly generated passphrase is:",phrase)
+    print("Your randomly generated passphrase is:",phrase)
     print("Store this safely, if you lose it you will have to commission a fresh installation.")
 
 ## Commission a lock file
