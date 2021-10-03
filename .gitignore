@@ -132,3 +132,5 @@ licenses/
 makeself/*.py
 makeself/Traversys/
 *.zip
+*.gpg
+temp/
