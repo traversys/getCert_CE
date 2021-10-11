@@ -28,13 +28,15 @@ import datetime
 import getpass
 import platform
 import secrets
-import re
 import configparser
 import py_compile
 import time
+import argparse
+from argparse import RawTextHelpFormatter
 
 # Pip modules
 import tideway
+import dotenv
 
 def ping(instance):
     current_os = platform.system().lower()
@@ -103,10 +105,20 @@ logfile = 'install_%s.log' % ( str(datetime.date.today()))
 logging.basicConfig(level=logging.INFO, filename=logfile, filemode='w')
 logger = logging.getLogger("getCert Installation")
 
+config = configparser.ConfigParser()
+
+parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=RawTextHelpFormatter)
+parser.add_argument('--nokeys', dest='nokeys', action='store_true', required=False, help='Do no save authentication token.\n\n')
+parser.add_argument('--nopatterns', dest='nopatterns', action='store_true', required=False, help='Do no upload Knowledge patterns.\n\n')
+
+args = parser.parse_args()
+
 pwd = os.getcwd()
 libdir = (pwd + "/lib")
 tpldir = (pwd + "/tpl")
 ini = (pwd + "/config.ini")
+env = libdir+"/.env"
+dotenv.load_dotenv(dotenv_path=env)
 
 os.system('clear')
 
@@ -160,6 +172,18 @@ swagger = disco.swagger()
 if swagger.ok:
     msg = "Successful API call to %s" % swagger.url
     logger.info(msg)
+    if args.nokeys:
+        msg = "Token not stored."
+        print(msg)
+        logger.info(msg)
+    else:
+        dotenv.set_key(env, "DISCOVERY_DEFAULT", token) # This is for the default/single instance
+        tok_key = instance.replace(".","_").upper()
+        try:
+            toke = os.environ['%s'%tok_key]
+        except:
+            print("Storing token in env key",tok_key)
+            dotenv.set_key(env, tok_key, token) # This is for multiple Discovery instances
 else:
     msg = "ERROR: Problem with API version, please refer to developer.\nReason: %s, URL: %s\n" % (swagger.reason, swagger.url)
     print(msg)
@@ -170,37 +194,6 @@ if apiver:
     disco = tideway.appliance(instance,token,api_version=apiver)
 else:
     disco = tideway.appliance(instance,token)
-
-## Generate Passphrase
-
-phrase = getpass.getpass(prompt='Set a GPG passphrase (or leave it blank for randomly generated one): ')
-if not phrase:
-    phrase = secrets.token_hex(32)
-    print("Your randomly generated passphrase is:",phrase)
-    print("Store this safely, if you lose it you will have to commission a fresh installation.")
-
-## Commission a lock file
-
-pfile= libdir+"/."+instance.replace(".","_")
-f=open(pfile, 'w')
-f.write(token)
-f.close()
-vault = libdir+"/"+instance.replace(".","_")
-msg = "Lock file commissioned: %s"%vault
-logger.info(msg)
-os.system('echo "%s" | gpg --yes --batch --quiet --passphrase-fd 0 -o %s -c %s' % (phrase, vault, pfile))
-os.remove(pfile)
-
-## Commission the key file
-
-kfile= libdir+"/"+instance.replace(".","_")+".py"
-f=open(kfile, 'w')
-f.write("passphrase = '%s'"%phrase)
-f.close()
-msg = "Key file commissioned: %s"%kfile
-logger.info(msg)
-py_compile.compile(kfile)
-os.remove(kfile)
 
 ## Read and Update Config
 
@@ -228,31 +221,34 @@ logger.debug(root)
 
 ## Deploy TPL
 
-try:
-    ku = disco.knowledge()
-    msg = "Connected to Discovery Knowledge endpoint."
-    logger.info(msg)
-except:
-    msg = "Error getting Knowledge from %s\n" % (instance)
-    print(msg)
-    logger.error(msg)
-    sys.exit(1)
-
-success = upload(ku, "Traversys_getCert_Functions.tpl", tpldir)
-if success:
-    success = upload(ku, "Traversys_getCert_Main.tpl", tpldir)
-if success:
-    success = upload(ku, "Traversys_getCert.tpl", tpldir)
-if success:
-    success = upload(ku, "Traversys_getCert_CMDB_SI.tpl", tpldir)
-
-if success:
-    msg = "Uploads complete!"
+if args.nopatterns:
+    msg = "No patterns uploaded."
     print(msg)
     logger.info(msg)
-    print("You can set the cronjob with the 'cron.sh' script\n")
 else:
-    msg = "Error: There was some problem with the TPL uploads, consult the log file"
-    print(msg)
+    try:
+        ku = disco.knowledge()
+        msg = "Connected to Discovery Knowledge endpoint."
+        logger.info(msg)
+    except:
+        msg = "Error getting Knowledge from %s\n" % (instance)
+        print(msg)
+        logger.error(msg)
+        sys.exit(1)
+    success = upload(ku, "Traversys_getCert_Functions.tpl", tpldir)
+    if success:
+        success = upload(ku, "Traversys_getCert_Main.tpl", tpldir)
+    if success:
+        success = upload(ku, "Traversys_getCert.tpl", tpldir)
+    if success:
+        success = upload(ku, "Traversys_getCert_CMDB_SI.tpl", tpldir)
+    if success:
+        msg = "Uploads complete!"
+        print(msg)
+        logger.info(msg)
+        print("You can set the cronjob with the 'cron.sh' script\n")
+    else:
+        msg = "Error: There was some problem with the TPL uploads, consult the log file"
+        print(msg)
 
 sys.exit(0)

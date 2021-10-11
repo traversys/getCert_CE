@@ -37,17 +37,17 @@ import sys
 import re
 import fileinput
 import datetime
-import base64
-import hashlib
 import shutil
 import csv
 import logging
 import configparser
 import argparse
 from argparse import RawTextHelpFormatter
+import secrets
 
 # Pip Packages
 import tideway
+import dotenv
 
 def csvFile(data, heads, args):
     data.insert(0, heads)
@@ -65,17 +65,18 @@ logger = logging.getLogger("getCert")
 config = configparser.ConfigParser()
 
 parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=RawTextHelpFormatter)
-parser.add_argument('-i', '--install', dest='installdir',  type=str, required=False, help='The install directory for getCert, default is current directory.\n\n', metavar='<directory_path>')
+parser.add_argument('-a', '--instance', dest='instance',  type=str, required=False, help='The target Discovery system.\n\n', metavar='<IP or URL used in install script>')
+parser.add_argument('-c', '--config', dest='config',  type=str, required=False, help='The location of the config.ini file.\n\n', metavar='<config.ini>')
+parser.add_argument('-l', '--logfile', dest='logfile',  type=str, required=False, help='Log standard output of scan.\n\n', metavar='<logfile>')
 
 args = parser.parse_args()
 
-pwd = args.installdir
+instance = args.instance
+ini = args.config
 
-if not pwd:
+if not ini:
     pwd = os.getcwd()
-
-libdir = (pwd + "/lib")
-ini = (pwd + "/config.ini")
+    ini = pwd+"/config.ini"
 
 # Read config file
 cfexists = os.path.isfile(ini)
@@ -84,10 +85,8 @@ if not cfexists:
     sys.exit(1)
 
 config.read(ini)
-
+root = config.get('ENV', 'root')
 temp = config.get('ENV', 'temp')
-log = config.get('ENV', 'log')
-capture = config.get('ENV', 'capture')
 iplist = config.get('ENV', 'iplist')
 mode = int(config.get('MODE', 'mode'))
 testsubnet = config.get('TEST_SUBNET', 'testsubnet')
@@ -96,9 +95,18 @@ query = config.get('DISCO_QUERY', 'query')
 timeout = config.get('TIMEOUT', 'timeout')
 ports = config.get('PORTS', 'ports')
 date = datetime.datetime.now()
-unlock = False
-instance = "discovery.seven.pembroke"
-token = "123"
+libdir = root+"/lib"
+env = libdir+"/.env"
+
+dotenv.load_dotenv(dotenv_path=env)
+
+if not instance:
+    tok_key = 'DISCOVERY_DEFAULT'
+else:
+    tok_key = instance.instance.replace(".","_").upper()
+    
+token = os.environ[tok_key]
+capture = temp+"/%s.xml"%tok_key
 
 if not os.path.exists(temp):
     os.makedirs(temp)
@@ -146,14 +154,22 @@ for line in curated.splitlines():
     f.write("\n")
 f.close()
 
-os.system('nmap -oX %s -p %s -n --host-timeout %s --script ssl-cert,ssl-enum-ciphers -iL %s > %s 2>&1' % (capture, ports, timeout, iplist, log))
+if args.logfile:
+    os.system('nmap -oX %s -p %s -n --host-timeout %s --script ssl-cert,ssl-enum-ciphers -iL %s > %s 2>&1' % (capture, ports, timeout, iplist, args.logfile))
+else:
+    os.system('nmap -oX %s -p %s -n --host-timeout %s --script ssl-cert,ssl-enum-ciphers -iL %s > /dev/null' % (capture, ports, timeout, iplist))
 
 for line in fileinput.FileInput(capture,inplace="1"):
     line = re.sub("(<!--.*)as: nmap.*?(-->)", r"\1\2", line)
     line = re.sub("(.*args=\")nmap.*?(\".*>)", r"\1\2", line)
     sys.stdout.write(line)
 
-os.system('echo "_traversys" | gpg --yes --batch --quiet --passphrase-fd 0 -o %s -c %s' % (temp + "/ssl-out.gpg", capture))
+phrase = secrets.token_hex(32)
+print("Randomly generated passphrase is:",phrase)
+
+os.system('echo "%s" | gpg --yes --batch --quiet --passphrase-fd 0 -o %s -c %s' % (phrase, temp + "/%s.gpg"%tok_key, capture))
 os.remove(capture)
+
+## Send event to Discovery
 
 sys.exit(0)

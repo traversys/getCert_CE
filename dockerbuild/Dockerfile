@@ -20,9 +20,9 @@ yum -y groupinstall "Development Tools"
 RUN pip3 install pyinstaller==3.6
 RUN pip3 install wheel
 RUN pip3 install tideway
+RUN pip3 install python-dotenv
 # Start crond
-RUN echo "0 18 * * * root python3 /usr/dev/getcertpy" >> /etc/crontab
-#RUN echo "* * * * * root echo \"Hello world\" >> /var/log/cron.log 2>&1" >> /etc/crontab
+RUN echo "0 18 * * * root python3 /usr/dev/getcertpy -c /usr/dev/config.ini" >> /etc/crontab
 # Setup sshd
 RUN mkdir /var/run/sshd
 RUN /usr/bin/ssh-keygen -A
