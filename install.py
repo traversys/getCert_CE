@@ -217,14 +217,14 @@ logger.debug(root)
 
 ## Update TPL file
 
-tplfile = open(tpldir + "/Traversys_getCert_Main.tpl").read()
-msg = "Updating %s/Traversys_getCert_Main.tpl"%tpldir
-logger.info(msg)
-newtpl = re.sub(r'install_dir := ~INSTALLDIR~;', 'install_dir := \'%s\';' % (root), tplfile)
-#tplfile = open(tpldir + "/Traversys_getCert_Main.tpl", 'w')
-tplfile = open(tpldir + "/Traversys_getCert_Main.tpl", 'w')
-tplfile.write(newtpl)
-tplfile.close()
+# tplfile = open(tpldir + "/Traversys_getCert_Main.tpl").read()
+# msg = "Updating %s/Traversys_getCert_Main.tpl"%tpldir
+# logger.info(msg)
+# newtpl = re.sub(r'install_dir := ~INSTALLDIR~;', 'install_dir := \'%s\';' % (root), tplfile)
+# #tplfile = open(tpldir + "/Traversys_getCert_Main.tpl", 'w')
+# tplfile = open(tpldir + "/Traversys_getCert_Main.tpl", 'w')
+# tplfile.write(newtpl)
+# tplfile.close()
 
 ## Deploy TPL
 

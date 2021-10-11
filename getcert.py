@@ -32,7 +32,6 @@
 #
 
 # Standard Packages
-
 import os
 import sys
 import re
@@ -44,9 +43,10 @@ import shutil
 import csv
 import logging
 import configparser
+import argparse
+from argparse import RawTextHelpFormatter
 
 # Pip Packages
-
 import tideway
 
 def csvFile(data, heads, args):
@@ -64,7 +64,16 @@ logger = logging.getLogger("getCert")
 
 config = configparser.ConfigParser()
 
-pwd = os.getcwd()
+parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=RawTextHelpFormatter)
+parser.add_argument('-i', '--install', dest='installdir',  type=str, required=False, help='The install directory for getCert, default is current directory.\n\n', metavar='<directory_path>')
+
+args = parser.parse_args()
+
+pwd = args.installdir
+
+if not pwd:
+    pwd = os.getcwd()
+
 libdir = (pwd + "/lib")
 ini = (pwd + "/config.ini")
 
@@ -88,11 +97,8 @@ timeout = config.get('TIMEOUT', 'timeout')
 ports = config.get('PORTS', 'ports')
 date = datetime.datetime.now()
 unlock = False
-instance = ""
-token = ""
-
-disco = tideway.appliance(instance,token)
-data = disco.data()
+instance = "discovery.seven.pembroke"
+token = "123"
 
 if not os.path.exists(temp):
     os.makedirs(temp)
@@ -104,6 +110,8 @@ if mode == 1:
 elif mode == 2:
     shutil.copyfile(file,iplist)
 elif mode == 3:
+    disco = tideway.appliance(instance,token)
+    data = disco.data()
     results = []
     try:
         results = data.search_bulk(query,limit=500)
