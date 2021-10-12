@@ -1,6 +1,6 @@
 # Pull from source
 FROM centos:7
-MAINTAINER team@traversys.io
+LABEL org.opencontainers.image.authors="team@traversys.io"
 
 # Setup the environment
 RUN yum clean all
@@ -22,7 +22,7 @@ RUN pip3 install wheel
 RUN pip3 install tideway
 RUN pip3 install python-dotenv
 # Start crond
-RUN echo "0 18 * * * root python3 /usr/dev/getcertpy -c /usr/dev/config.ini" >> /etc/crontab
+RUN echo "0 14 * * * root python3 /usr/dev/getcertpy -c /usr/dev/config.ini" >> /etc/crontab
 # Setup sshd
 RUN mkdir /var/run/sshd
 RUN /usr/bin/ssh-keygen -A

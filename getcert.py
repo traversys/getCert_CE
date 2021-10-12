@@ -44,6 +44,7 @@ import configparser
 import argparse
 from argparse import RawTextHelpFormatter
 import secrets
+from pprint import pprint
 
 # Pip Packages
 import tideway
@@ -65,7 +66,7 @@ logger = logging.getLogger("getCert")
 config = configparser.ConfigParser()
 
 parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=RawTextHelpFormatter)
-parser.add_argument('-a', '--instance', dest='instance',  type=str, required=False, help='The target Discovery system.\n\n', metavar='<IP or URL used in install script>')
+parser.add_argument('-a', '--instance', dest='instance',  type=str, required=True, help='The target Discovery system.\n\n', metavar='<IP or URL used in install script>')
 parser.add_argument('-c', '--config', dest='config',  type=str, required=False, help='The location of the config.ini file.\n\n', metavar='<config.ini>')
 parser.add_argument('-l', '--logfile', dest='logfile',  type=str, required=False, help='Log standard output of scan.\n\n', metavar='<logfile>')
 
@@ -100,11 +101,10 @@ env = libdir+"/.env"
 
 dotenv.load_dotenv(dotenv_path=env)
 
-if not instance:
+tok_key = instance.replace(".","_").upper()
+if not tok_key:
     tok_key = 'DISCOVERY_DEFAULT'
-else:
-    tok_key = instance.instance.replace(".","_").upper()
-    
+
 token = os.environ[tok_key]
 capture = temp+"/%s.xml"%tok_key
 
@@ -170,6 +170,18 @@ print("Randomly generated passphrase is:",phrase)
 os.system('echo "%s" | gpg --yes --batch --quiet --passphrase-fd 0 -o %s -c %s' % (phrase, temp + "/%s.gpg"%tok_key, capture))
 os.remove(capture)
 
+event = {
+            "source": "getCert",
+            "type": "cert_scan",
+            "params": {
+                "phrase":"%s"%phrase,
+                "file":"%s/%s.gpg"%(temp,tok_key)
+                }
+        }
+pprint(event)
+
 ## Send event to Discovery
+events = disco.events()
+events.status(event)
 
 sys.exit(0)

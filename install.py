@@ -180,7 +180,7 @@ if swagger.ok:
         dotenv.set_key(env, "DISCOVERY_DEFAULT", token) # This is for the default/single instance
         tok_key = instance.replace(".","_").upper()
         try:
-            toke = os.environ['%s'%tok_key]
+            os.environ['%s'%tok_key]
         except:
             print("Storing token in env key",tok_key)
             dotenv.set_key(env, tok_key, token) # This is for multiple Discovery instances

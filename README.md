@@ -15,7 +15,7 @@ Polls devices on a given IP range for SSL certificate details.
 
 ### Quickstart
 1. Install and configure Docker
-2. Run `docker build --tag getcert -f dockerbuild/Dockerfile .`
+2. Run `docker build --tag getcert --progress=plain -f dockerbuild/Dockerfile .`
 3. To use run `docker run -t -d -p 2222:22 --name getCert -v ${PWD}:/usr/dev getcert:latest`
 4. To access the shell: `docker exec -it getCert /bin/bash`
 

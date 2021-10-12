@@ -17,13 +17,11 @@ tpl 1.15 module Traversys_SSL_getCert;
 metadata
     __name:='Traversys getCert';
     description:='Traversys getCert Main Pattern';
-    tree_path:='Traversys', 'SSL Discovery', 'getCert';
+    tree_path:='Traversys', 'SSL Certificate Discovery', 'getCert';
 end metadata;
 
-//// Remove Import lines to make changes ////
 from Traversys_SSL_getCert_Functions import traversysGlobalDefs 1.6;
 from Traversys_SSL_getCert_Main import traversysConfig 1.2, Traversys_getCert_Config 1.0;
-/////////////////////////////////////////////
 
 definitions traversysGetCert 1.3
     """
@@ -95,14 +93,12 @@ pattern Traversys_getCert 1.5
     2020-04-13 1.3  WMF  :  Added removal groups, new method to capture serial
                             number and other details.
     2021-02-13 1.4 WMF   :  Removed licensing requirements for Open Source Edition.
-    2021-09-24 1.5 WMF   :  Updated attributes to match BMC TKU certificate details.
+    2021-10-12 1.5 WMF   :  Updated attributes to match BMC TKU certificate details.
                             Migrated to SofwareInstance link. Will generate new SI
                             if missing.
+                            Main pattern now triggers on ExternalEvent.
 
     You may copy and modify this to generate your own SSL Certificate model.
-
-    Once changes are uploaded, you will need to reinstall getCert to revert to
-    original.
 
     '''
 
@@ -115,12 +111,54 @@ pattern Traversys_getCert 1.5
     end constants;
 
     triggers
-        on f:=File created, confirmed where name = "getCert XML";
+        on event := ExternalEvent created where type = "cert_scan";
     end triggers;
 
     body
 
-        host:= none;
+        getCert_host := discovery.dataSource("getCert");
+        install_dir  := traversysConfig.install_dir;
+        gpg_file     := event.file;
+        phrase       := event.phrase;
+
+        get:= discovery.fileInfo(getCert_host, "%gpg_file%");
+
+        if get and get.method_success then
+            decrypt:= discovery.runCommand(getCert_host, 'echo "%phrase%" | gpg -d --batch --yes --quiet --no-mdc-warning --passphrase-fd 0 --decrypt %gpg_file%');
+            if decrypt and decrypt.result then
+                xdoc:=xpath.openDocument(regex.extract(capFile.result, regex "(?is)(<\?xml.*</nmaprun>)", raw "\1"));
+                ips:=xpath.evaluate(xdoc,'//host/address/@addr');
+                xpath.closeDocument(xdoc);
+                xmlData:= regex.extract(capFile.result, regex "(?is)(<\?xml.*</nmaprun>)", raw "\1");
+        elif capFile and capFile.failure_reason = "NoAccessMethod" then
+            log.warn("Validation Failure: Failed to decrypt capture file.");
+            stop;
+        else
+            log.warn("Validation Failure: Capture file not found.");
+            stop;
+        end if;
+
+        if traversysConfig.file then
+
+            f:= model.File( key:= si.key,
+                            name:= "getCert XML",
+                            content:= xml,
+                            md5sum:= text.hash(xml),
+                            path:= "%traversysConfig.install_dir%/temp/ssl-out.xml"
+                          );
+             model.setRemovalGroup(f, "SSL File");
+
+             if traversysConfig.link_file then
+                model.rel.RelatedFile(ElementUsingFile := si, File := f);
+             end if;
+
+        end if;
+
+        // Optional artificial aging - 7 days for inferred nodes only
+        traversysGlobalDefs.age(traversysConfig.aging);
+
+        // Attribute cleanup - Inferred nodes only
+        traversysGlobalDefs.att_cleanup();
 
         si:= search(in f traverse File:RelatedFile:ElementUsingFile:SoftwareInstance);
         if size(si) > 0 then
