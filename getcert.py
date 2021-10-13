@@ -178,8 +178,7 @@ event = {
                 "file":"%s/%s.gpg"%(temp,tok_key)
                 }
         }
-pprint(event)
-
+        
 ## Send event to Discovery
 events = disco.events()
 events.status(event)

@@ -12,16 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-tpl 1.15 module Traversys_SSL_getCert;
+tpl 1.18 module Traversys_SSL_getCert;
 
 metadata
-    __name:='Traversys getCert';
-    description:='Traversys getCert Main Pattern';
-    tree_path:='Traversys', 'SSL Certificate Discovery', 'getCert';
+    __name          :='Traversys getCert';
+    description     :='Traversys getCert Main Pattern';
+    tree_path       :='Traversys', 'SSL Certificate Discovery', 'getCert';
+    extra_rel_kinds := "Detail:Detail:ElementWithDetail:StorageDevice","Detail:Detail:ElementWithDetail:SNMPManagedDevice","Detail:Detail:ElementWithDetail:Printer";
 end metadata;
 
-from Traversys_SSL_getCert_Functions import traversysGlobalDefs 1.6;
-from Traversys_SSL_getCert_Main import traversysConfig 1.2, Traversys_getCert_Config 1.0;
+configuration traversysConfig 1.2
+
+    """This definitions block is used by the getCert pattern."""
+
+    "Break inference relationship?"                           break_relationship  := false;
+
+    "Artificially age out certificates (7 days)?"             aging               := false;
+
+    "Attempt to map SSL Certificates to Discovered Device?"   map_device          := true;
+
+    "Attempt to map SSL Certificates using Common Name?"      map_name            := true;
+
+    "Set Removal Group?"                                      rem_group           := true;
+
+    "Infer File node?"                                        file                := true;
+
+    "Link to Discovery SI?"                                   link_file           := true;
+
+end configuration;
 
 definitions traversysGetCert 1.3
     """
@@ -74,6 +92,57 @@ definitions traversysGetCert 1.3
 
     end define;
 
+        define valid_dates(nb, na) -> vf, vt
+        "Convert valid time formats"
+
+        vf:= "No Data Available";
+        vt:= "No Data Available";
+
+        if nb matches "Can't parse" then
+            log.warn("Valid From date parse error: %nb%");
+        else
+            nf:= time.parseUTC(nb);
+            vf:= time.formatUTC(nf, "%%Y-%%m-%%d");
+        end if;
+
+        if na matches "Can't parse" then
+            log.warn("Valid To date parse error: %na%");
+        else
+            nt:= time.parseUTC(na);
+            vt:= time.formatUTC(nt, "%%Y-%%m-%%d");
+        end if;
+
+        return vf, vt;
+
+    end define;
+
+    define att_cleanup()
+        """Cleanup Inferred Attributes"""
+
+        infer_nodes:= search(PatternModule where name = 'Traversys_SSL_getCert'
+                        traverse PatternModule:PatternModuleContainment:Pattern:Pattern
+                        traverse Pattern:Maintainer:Element:
+                       );
+        inf_size:= size(infer_nodes);
+
+        uniq_list:= search(in infer_nodes show keys(#) as "attr" processwith unique(0));
+        uniq_size:= size(uniq_list);
+
+        for node in uniq_list do
+            attributes:= node[0];
+            for attr in attributes do
+                for det in infer_nodes do
+                    if attr not in det then
+                        continue;
+                    elif det["%attr%"] = "" then
+                        det[attr]:= void;
+                    end if;
+                end for;
+            end for;
+        end for;
+
+    end define;
+
 end definitions;
 
 
@@ -117,60 +186,30 @@ pattern Traversys_getCert 1.5
     body
 
         getCert_host := discovery.dataSource("getCert");
-        install_dir  := traversysConfig.install_dir;
         gpg_file     := event.file;
         phrase       := event.phrase;
 
+        test:= discovery.runCommand(getCert_host, 'whoami && pwd');
         get:= discovery.fileInfo(getCert_host, "%gpg_file%");
 
         if get and get.method_success then
             decrypt:= discovery.runCommand(getCert_host, 'echo "%phrase%" | gpg -d --batch --yes --quiet --no-mdc-warning --passphrase-fd 0 --decrypt %gpg_file%');
             if decrypt and decrypt.result then
-                xdoc:=xpath.openDocument(regex.extract(capFile.result, regex "(?is)(<\?xml.*</nmaprun>)", raw "\1"));
+                xdoc:=xpath.openDocument(regex.extract(decrypt.result, regex "(?is)(<\?xml.*</nmaprun>)", raw "\1"));
                 ips:=xpath.evaluate(xdoc,'//host/address/@addr');
                 xpath.closeDocument(xdoc);
-                xmlData:= regex.extract(capFile.result, regex "(?is)(<\?xml.*</nmaprun>)", raw "\1");
-        elif capFile and capFile.failure_reason = "NoAccessMethod" then
-            log.warn("Validation Failure: Failed to decrypt capture file.");
-            stop;
-        else
-            log.warn("Validation Failure: Capture file not found.");
-            stop;
-        end if;
-
-        if traversysConfig.file then
-
-            f:= model.File( key:= si.key,
-                            name:= "getCert XML",
-                            content:= xml,
-                            md5sum:= text.hash(xml),
-                            path:= "%traversysConfig.install_dir%/temp/ssl-out.xml"
-                          );
-             model.setRemovalGroup(f, "SSL File");
-
-             if traversysConfig.link_file then
-                model.rel.RelatedFile(ElementUsingFile := si, File := f);
-             end if;
-
-        end if;
-
-        // Optional artificial aging - 7 days for inferred nodes only
-        traversysGlobalDefs.age(traversysConfig.aging);
-
-        // Attribute cleanup - Inferred nodes only
-        traversysGlobalDefs.att_cleanup();
-
-        si:= search(in f traverse File:RelatedFile:ElementUsingFile:SoftwareInstance);
-        if size(si) > 0 then
-            host:= related.host(si[0]);
-        else
-            sis:= search(SoftwareInstance where key = "%f.key%");
-            if size(sis) > 0 then
-                host:= related.host(sis[0]);
+                xmlData:= regex.extract(decrypt.result, regex "(?is)(<\?xml.*</nmaprun>)", raw "\1");
+            elif decrypt and decrypt.failure_reason = "NoAccessMethod" then
+                log.critical("Failure: Failed to decrypt %gpg_file%.");
+                stop;
+            else
+                log.critical("Failure: Issue with %gpg_file%.");
+                stop;
             end if;
+        else
+            log.critical("Failure: %gpg_file% not found.");
+            stop;
         end if;
-
-        xdoc:=xpath.openDocument(f.content);
 
         ip_addrs:=xpath.evaluate(xdoc,'//host/address/@addr');
 
@@ -232,10 +271,17 @@ pattern Traversys_getCert 1.5
                 re:="%pubkeybits%-bit";
 
                 // This function cleans up the date values
-                valid_from, valid_to:= traversysGlobalDefs.valid_dates(validfrom, validto);
+                valid_from, valid_to:= traversysGetCert.valid_dates(validfrom, validto);
 
                 dev_ips:= search(DiscoveryAccess where _last_marker and endpoint = "%ip_addr%" traverse Associate:Inference:InferredElement:);
-                dev_cns:=search( * where local_fqdn = "%sub_cname%" or hostname = "%sub_cname%" or local_fqdn = "%iss_cname%" or hostname = "%iss_cname%");
+                dev_cns:=search(Host,NetworkDevice,StorageSystem,SNMPManagedDevice,Printer where local_fqdn = "%sub_cname%"
+                                    or hostname = "%sub_cname%"
+                                    or name = "%sub_cname%"
+                                    or sysname = "%sub_cname%"
+                                    or local_fqdn = "%iss_cname%"
+                                    or hostname = "%iss_cname%"
+                                    or name = "%iss_cname%"
+                                    or sysname = "%iss_cname%");
 
                 // This function will automatically generate a unique key and name values
                 key, name, common_names:=traversysGetCert.build_key(ip_addr, sub_cname, iss_cname, type, dev_ips, dev_cns);
@@ -250,19 +296,19 @@ pattern Traversys_getCert 1.5
                 errors:= none;
                 self_signed:= false;
 
-                scan_cmd:= "%traversysConfig.install_dir%/unlocker --ssl ";
+                // scan_cmd:= "%traversysConfig.install_dir%/unlocker --ssl ";
 
-                if host then
-                    scan:= discovery.runCommand(host, scan_cmd+connection);
+                // if host then
+                //     scan:= discovery.runCommand(host, scan_cmd+connection);
 
-                    if scan and scan.result then
-                        serial:=regex.extract(scan.result, regex "serial=(\w+)", raw "\1");
-                        errors:=regex.extract(scan.result, regex "verify error:(.*)", raw "\1");
-                        if errors and errors matches "self signed certificate" then
-                            self_signed:= true;
-                        end if;
-                    end if;
-                end if;
+                //     if scan and scan.result then
+                //         serial:=regex.extract(scan.result, regex "serial=(\w+)", raw "\1");
+                //         errors:=regex.extract(scan.result, regex "verify error:(.*)", raw "\1");
+                //         if errors and errors matches "self signed certificate" then
+                //             self_signed:= true;
+                //         end if;
+                //     end if;
+                // end if;
 
                 // Get Ciphers
                 ciphers:=traversysGetCert.xValue(xdoc,root_xml+'/script[2]/@output');
@@ -430,19 +476,23 @@ pattern Traversys_getCert 1.5
                         end for;
                     else
                         for device in devices do
-                            log.debug("No related SIs for %port%, generating new SI...");
-                            newType:= sub_cname;
-                            host:= device;
-                            newSI := model.SoftwareInstance(key:= key,
-                                                            type:= newType,
-                                                            name:= "%newType% on %host.name%",
-                                                            port:= portn
-                                                            );
-                            log.info("New SI created %newSI.name%...");
-                            if model.kind(device.type = "Host") then
+                            log.debug("No related nodes for %port%");
+                            if model.kind(device) = "Host" then
+                                log.info("Generating new SI for cert %cd.name%...");
+                                newType:= sub_cname;
+                                host:= device;
+                                newSI := model.SoftwareInstance(key:= key,
+                                                                type:= newType,
+                                                                name:= "%newType% on %host.name%",
+                                                                port:= portn
+                                                                );
+                                log.info("New SI created %newSI.name%...");
                                 model.rel.Detail(ElementWithDetail := newSI, Detail := cd);
                                 model.rel.HostedSoftware(Host := device, RunningSoftware := newSI);
                             else // Attach to the device itself
+                                log.info("Association Cert %cd.name% with device %device.name%...");
+                                // snmp, printer and storage devices don't have a direct relationship to Detail
+                                // new relationships added in metadata
                                 dt:=model.rel.Detail(ElementWithDetail:=device, Detail:=cd);
                             end if;
                         end for;
@@ -456,9 +506,8 @@ pattern Traversys_getCert 1.5
 
         xpath.closeDocument(xdoc);
 
-        // Optional break relationship from the current Discovery appliance -
-        // results in orphan Details where no Device is related
-        traversysGlobalDefs.unlink(traversysConfig.break_relationship, host, type);
+        // Attribute cleanup - Inferred nodes only
+        traversysGetCert.att_cleanup();
 
     end body;
 

@@ -186,8 +186,7 @@ definitions traversysGlobalDefs 1.6
     define att_cleanup()
         """Cleanup Inferred Attributes"""
 
-        infer_nodes:= search(PatternModule where name = 'Traversys_SSL_getCert_Triggers'
-                                              or name = 'Traversys_SSL_getCert'
+        infer_nodes:= search(PatternModule where name = 'Traversys_SSL_getCert'
                         traverse PatternModule:PatternModuleContainment:Pattern:Pattern
                         traverse Pattern:Maintainer:Element:
                        );
