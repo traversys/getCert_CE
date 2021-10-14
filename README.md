@@ -16,7 +16,7 @@ Polls devices on a given IP range for SSL certificate details.
 ### Quickstart
 1. Install and configure Docker
 2. Run `docker build --tag getcert --progress=plain -f dockerbuild/Dockerfile .`
-3. To use run `docker run -t -d -p 2222:22 --name getCert -v ${PWD}:/usr/dev getcert:latest`
+3. To use run `docker run -t -d -p 2222:22 --name getCert -v ${PWD}:/opt/Traversys/getCert getcert:latest`
 4. To access the shell: `docker exec -it getCert /bin/bash`
 
 ### SSH Access
@@ -28,7 +28,7 @@ Polls devices on a given IP range for SSL certificate details.
 
 ### Production
 1. Install and configure Docker
-2. Run `docker run -t -d -p 2222:22 --name getCert -v ${PWD}:/usr/dev getcert:latest`
+2. Run `docker run -t -d -p 2222:22 --name getCert -v ${PWD}:/opt/Traversys/getCert getcert:latest`
 3. To stop the container: `docker stop <container id>`
 
 **NOTE** When you exit the container it will stop running. To get back in (and start) the container run `docker start <container id>`

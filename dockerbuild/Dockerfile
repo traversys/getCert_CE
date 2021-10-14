@@ -22,7 +22,7 @@ RUN pip3 install wheel
 RUN pip3 install tideway
 RUN pip3 install python-dotenv
 # Start crond
-RUN echo "0 14 * * * root python3 /usr/dev/getcertpy -c /usr/dev/config.ini" >> /etc/crontab
+RUN echo "0 14 * * * root python3 /opt/Traversys/getCert/getcertpy -c /opt/Traversys/getCert/config.ini" >> /etc/crontab
 # Setup sshd
 RUN mkdir /var/run/sshd
 RUN /usr/bin/ssh-keygen -A

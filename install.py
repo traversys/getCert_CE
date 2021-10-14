@@ -25,14 +25,10 @@ import os
 import sys
 import logging
 import datetime
-import getpass
 import platform
-import secrets
 import configparser
-import py_compile
 import time
 import argparse
-from argparse import RawTextHelpFormatter
 
 # Pip modules
 import tideway
@@ -101,23 +97,28 @@ def upload(disco, pattern_name, tpl_path):
         success = False
     return success
 
-logfile = 'install_%s.log' % ( str(datetime.date.today()))
-logging.basicConfig(level=logging.INFO, filename=logfile, filemode='w')
-logger = logging.getLogger("getCert Installation")
-
 config = configparser.ConfigParser()
-
-parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=RawTextHelpFormatter)
+parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('--nokeys', dest='nokeys', action='store_true', required=False, help='Do no save authentication token.\n\n')
 parser.add_argument('--nopatterns', dest='nopatterns', action='store_true', required=False, help='Do no upload Knowledge patterns.\n\n')
+parser.add_argument('--debug', dest='debug', action='store_true', required=False, help='Run installation with debug logging.\n\n')
 
 args = parser.parse_args()
 
 pwd = os.getcwd()
 libdir = (pwd + "/lib")
 tpldir = (pwd + "/tpl")
+logdir = (pwd + "/logs")
 ini = (pwd + "/config.ini")
 env = libdir+"/.env"
+
+logfile = '%s/install_%s.log' % (logdir,str(datetime.date.today()))
+if args.debug:
+    logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode='w')
+else:
+    logging.basicConfig(level=logging.INFO, filename=logfile, filemode='w')
+logger = logging.getLogger("getCert Installer")
+
 dotenv.load_dotenv(dotenv_path=env)
 
 os.system('clear')
@@ -162,7 +163,7 @@ except OSError as e:
 msg = "About: %s\n"%about.json()
 logger.info(msg)
 
-print("Using API version",apiver,"\n")
+logger.info("Using API version%s"%apiver)
 
 disco = tideway.appliance(instance,token,api_version=apiver)
 msg = "API found on %s." % instance
@@ -181,11 +182,12 @@ if swagger.ok:
         tok_key = instance.replace(".","_").upper()
         try:
             os.environ['%s'%tok_key]
+            logger.info("Token already exists for %s"%tok_key)
         except:
-            print("Storing token in env key",tok_key)
+            logger.info("New token stored in env key for %s"%tok_key)
             dotenv.set_key(env, tok_key, token) # This is for multiple Discovery instances
 else:
-    msg = "ERROR: Problem with API version, please refer to developer.\nReason: %s, URL: %s\n" % (swagger.reason, swagger.url)
+    msg = "ERROR: Problem with API, please refer to developer.\nReason: %s, URL: %s\n" % (swagger.reason, swagger.url)
     print(msg)
     logger.error(msg)
     sys.exit(1)
@@ -208,17 +210,6 @@ with open(ini, 'w') as configfile:
 root = config.get('ENV', 'root')
 logger.debug(root)
 
-## Update TPL file
-
-# tplfile = open(tpldir + "/Traversys_getCert_Main.tpl").read()
-# msg = "Updating %s/Traversys_getCert_Main.tpl"%tpldir
-# logger.info(msg)
-# newtpl = re.sub(r'install_dir := ~INSTALLDIR~;', 'install_dir := \'%s\';' % (root), tplfile)
-# #tplfile = open(tpldir + "/Traversys_getCert_Main.tpl", 'w')
-# tplfile = open(tpldir + "/Traversys_getCert_Main.tpl", 'w')
-# tplfile.write(newtpl)
-# tplfile.close()
-
 ## Deploy TPL
 
 if args.nopatterns:
@@ -235,20 +226,16 @@ else:
         print(msg)
         logger.error(msg)
         sys.exit(1)
-    success = upload(ku, "Traversys_getCert_Functions.tpl", tpldir)
-    if success:
-        success = upload(ku, "Traversys_getCert_Main.tpl", tpldir)
-    if success:
-        success = upload(ku, "Traversys_getCert.tpl", tpldir)
-    if success:
-        success = upload(ku, "Traversys_getCert_CMDB_SI.tpl", tpldir)
+    # Uploaded in order of this list
+    tpl_names = [ "traversys_getCert_funcs.tpl", "traversys_getCert.tpl", "traversys_getCert_CMDB_si.tpl" ]
+    for tpl_name in tpl_names:
+        success = upload(ku, tpl_name, tpldir)
     if success:
         msg = "Uploads complete!"
         print(msg)
         logger.info(msg)
-        print("You can set the cronjob with the 'cron.sh' script\n")
     else:
-        msg = "Error: There was some problem with the TPL uploads, consult the log file"
+        msg = "Error: There was some problem with the TPL uploads, consult the log file!"
         print(msg)
 
 sys.exit(0)

@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-tpl 1.15 module Traversys_SSL_getCert_CMDB_SI;
+tpl 1.15 module traversys_getCert_CMDB_SI;
 
 metadata
     origin:= "Traversys Limited";
     __name:='Traversys getCert';
-    description:='Traversys getCert CMDB sync pattern';
-    tree_path:='Traversys', 'SSL Discovery', 'getCert CMDB';
+    description:='Traversys getCert CMDB sync for SIs';
+    tree_path:='Traversys', 'getCert', 'CMDB Sync';
 end metadata;
 
 from CMDB.SoftwareInstance_SoftwareServer import SoftwareInstance_SoftwareServer 4.0;
@@ -32,7 +32,7 @@ syncmapping getCert_SSL_Certificate 1.0
 
     """
     overview
-        tags getCert, Traversys;
+        tags ssl, getCert, traversys;
     end overview;
 
     mapping from SoftwareInstance_SoftwareServer.softwareinstance as si
@@ -42,7 +42,7 @@ syncmapping getCert_SSL_Certificate 1.0
     end mapping;
 
     body
-        ss := SoftwareInstance_SoftwareServer.softwareserver
+        ss := SoftwareInstance_SoftwareServer.softwareserver;
 
         for each ssl_dt do
 

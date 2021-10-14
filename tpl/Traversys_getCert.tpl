@@ -15,138 +15,16 @@
 tpl 1.18 module Traversys_SSL_getCert;
 
 metadata
+    origin:= "Traversys Limited";
     __name          :='Traversys getCert';
-    description     :='Traversys getCert Main Pattern';
-    tree_path       :='Traversys', 'SSL Certificate Discovery', 'getCert';
+    description     :='Traversys getCert';
+    tree_path       :='Traversys', 'getCert', 'getCert';
     extra_rel_kinds := "Detail:Detail:ElementWithDetail:StorageDevice","Detail:Detail:ElementWithDetail:SNMPManagedDevice","Detail:Detail:ElementWithDetail:Printer";
 end metadata;
 
-configuration traversysConfig 1.2
+from traversys_getCert_funcs import getcert 1.7;
 
-    """This definitions block is used by the getCert pattern."""
-
-    "Break inference relationship?"                           break_relationship  := false;
-
-    "Artificially age out certificates (7 days)?"             aging               := false;
-
-    "Attempt to map SSL Certificates to Discovered Device?"   map_device          := true;
-
-    "Attempt to map SSL Certificates using Common Name?"      map_name            := true;
-
-    "Set Removal Group?"                                      rem_group           := true;
-
-    "Infer File node?"                                        file                := true;
-
-    "Link to Discovery SI?"                                   link_file           := true;
-
-end configuration;
-
-definitions traversysGetCert 1.3
-    """
-        Traversys SSL Certificate Disovery specific definitions.
-    """
-
-    define xValue(xKey, path) -> value
-        """ Supports XML single item list extraction """
-
-        value:="";
-
-        len:=xpath.evaluate(xKey, path);
-        if size(len) > 0 then
-            value:=len[0];
-        end if;
-
-        return value;
-
-    end define;
-
-    define build_key(ip, subcn, isscn, type, ips, cns) -> key, name, cn
-        """ Generate a key for certificate """
-
-        cn:= "%subcn%/%isscn%";
-
-        if not subcn matches "[A-Za-z0-9]" then
-            cn:= isscn;
-        end if;
-
-        if not isscn matches "[A-Za-z0-9]" then
-            cn:= subcn;
-        end if;
-
-        if size(ips) > 0 then
-            ip:= ips[0].name;
-        elif size(cns) > 0 then
-            ip:= cns[0].name;
-        end if;
-
-        name:="%type% on %ip%";
-
-        if cn matches "[A-Za-z0-9]" then
-            name:="%type% for %cn% on %ip%";
-        end if;
-
-        key:=text.hash("%ip%/%cn%");
-        log.debug("Key %key% created for %name%");
-
-        return key, name, cn;
-
-    end define;
-
-        define valid_dates(nb, na) -> vf, vt
-        "Convert valid time formats"
-
-        vf:= "No Data Available";
-        vt:= "No Data Available";
-
-        if nb matches "Can't parse" then
-            log.warn("Valid From date parse error: %nb%");
-        else
-            nf:= time.parseUTC(nb);
-            vf:= time.formatUTC(nf, "%%Y-%%m-%%d");
-        end if;
-
-        if na matches "Can't parse" then
-            log.warn("Valid To date parse error: %na%");
-        else
-            nt:= time.parseUTC(na);
-            vt:= time.formatUTC(nt, "%%Y-%%m-%%d");
-        end if;
-
-        return vf, vt;
-
-    end define;
-
-    define att_cleanup()
-        """Cleanup Inferred Attributes"""
-
-        infer_nodes:= search(PatternModule where name = 'Traversys_SSL_getCert'
-                        traverse PatternModule:PatternModuleContainment:Pattern:Pattern
-                        traverse Pattern:Maintainer:Element:
-                       );
-        inf_size:= size(infer_nodes);
-
-        uniq_list:= search(in infer_nodes show keys(#) as "attr" processwith unique(0));
-        uniq_size:= size(uniq_list);
-
-        for node in uniq_list do
-            attributes:= node[0];
-            for attr in attributes do
-                for det in infer_nodes do
-                    if attr not in det then
-                        continue;
-                    elif det["%attr%"] = "" then
-                        det[attr]:= void;
-                    end if;
-                end for;
-            end for;
-        end for;
-
-    end define;
-
-end definitions;
-
-
-pattern Traversys_getCert 1.5
+pattern traversys_getCert 1.5
     '''
     Traversys getCert Main Body
 
@@ -189,7 +67,7 @@ pattern Traversys_getCert 1.5
         gpg_file     := event.file;
         phrase       := event.phrase;
 
-        test:= discovery.runCommand(getCert_host, 'whoami && pwd');
+        //test:= discovery.runCommand(getCert_host, 'whoami && pwd');
         get:= discovery.fileInfo(getCert_host, "%gpg_file%");
 
         if get and get.method_success then
@@ -221,57 +99,57 @@ pattern Traversys_getCert 1.5
 
                 root_xml:='//host/address[@addr="%ip_addr%"]/../ports/port[@portid="%port%"]';
 
-                portstate:=traversysGetCert.xValue(xdoc,root_xml+'/state/@state');
+                portstate:=getcert.xValue(xdoc,root_xml+'/state/@state');
                 if portstate = "closed" then
                     log.warn("%ip_addr%:%port% closed, skipping...");
                     continue;
                 end if;
 
-                rawout:=traversysGetCert.xValue(xdoc,root_xml+'/script/@output');
+                rawout:=getcert.xValue(xdoc,root_xml+'/script/@output');
                 if not rawout then
                     log.warn("No SSL Certificate found on port %port%, skipping...");
                     continue;
                 end if;
 
-                sub_cname      :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="commonName"]/text()');
+                sub_cname      :=getcert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="commonName"]/text()');
                 sub_cname      := text.lower(sub_cname);
-                sub_country    :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="countryName"]/text()');
-                sub_state      :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="stateOrProvinceName"]/text()');
-                sub_locality   :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="localityName"]/text()');
-                sub_orgname    :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="organizationName"]/text()');
-                sub_email      :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="emailAddress"]/text()');
-                sub_orgunit    :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="organizationalUnitName"]/text()');
+                sub_country    :=getcert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="countryName"]/text()');
+                sub_state      :=getcert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="stateOrProvinceName"]/text()');
+                sub_locality   :=getcert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="localityName"]/text()');
+                sub_orgname    :=getcert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="organizationName"]/text()');
+                sub_email      :=getcert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="emailAddress"]/text()');
+                sub_orgunit    :=getcert.xValue(xdoc,root_xml+'/script/table[@key="subject"]/elem[@key="organizationalUnitName"]/text()');
 
                 sub:= "commonName=%sub_cname%; countryName=%sub_country%; stateOrProvinceName=%sub_state%; localityName=%sub_locality%; organizationName=%sub_orgname%; organizationalUnitName=%sub_orgunit%; emailAddress=%sub_email%;";
 
-                iss_cname      :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="commonName"]/text()');
+                iss_cname      :=getcert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="commonName"]/text()');
                 iss_cname      := text.lower(iss_cname);
-                iss_country    :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="countryName"]/text()');
-                iss_state      :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="stateOrProvinceName"]/text()');
-                iss_locality   :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="localityName"]/text()');
-                iss_orgname    :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="organizationName"]/text()');
-                iss_email      :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="emailAddress"]/text()');
-                iss_orgunit    :=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="organizationalUnitName"]/text()');
+                iss_country    :=getcert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="countryName"]/text()');
+                iss_state      :=getcert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="stateOrProvinceName"]/text()');
+                iss_locality   :=getcert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="localityName"]/text()');
+                iss_orgname    :=getcert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="organizationName"]/text()');
+                iss_email      :=getcert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="emailAddress"]/text()');
+                iss_orgunit    :=getcert.xValue(xdoc,root_xml+'/script/table[@key="issuer"]/elem[@key="organizationalUnitName"]/text()');
 
                 iss:= "commonName=%iss_cname%; countryName=%iss_country%; stateOrProvinceName=%iss_state%; localityName=%iss_locality%; organizationName=%iss_orgname%; organizationalUnitName=%iss_orgunit%; emailAddress=%iss_email%;";
 
-                sha:=traversysGetCert.xValue(xdoc,root_xml+'/script/[@key="sha1"]/text()');
-                pubkeytype:=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="pubkey"]/elem[@key="type"]/text()');
-                pubkeybits:=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="pubkey"]/elem[@key="bits"]/text()');
-                subaltname:=traversysGetCert.xValue(xdoc,root_xml+'/script/table[@key="extensions"]/table[elem/text()="X509v3 Subject Alternative Name"]/elem[@key="value"]/text()');
-                notbefore:=traversysGetCert.xValue(xdoc,root_xml+'/script/table/elem[@key="notBefore"]/text()');
+                sha1:=getcert.xValue(xdoc,root_xml+'/script/elem[@key="sha1"]/text()');
+                pubkeytype:=getcert.xValue(xdoc,root_xml+'/script/table[@key="pubkey"]/elem[@key="type"]/text()');
+                pubkeybits:=getcert.xValue(xdoc,root_xml+'/script/table[@key="pubkey"]/elem[@key="bits"]/text()');
+                subaltname:=getcert.xValue(xdoc,root_xml+'/script/table[@key="extensions"]/table[elem/text()="X509v3 Subject Alternative Name"]/elem[@key="value"]/text()');
+                notbefore:=getcert.xValue(xdoc,root_xml+'/script/table/elem[@key="notBefore"]/text()');
                 date:= regex.extract(notbefore, regex "((\d+-?)+)T", raw "\1");
                 dtime:= regex.extract(notbefore, regex "T((\d+:?)+)", raw "\1");
                 validfrom:="%date% %dtime%";
-                notafter:=traversysGetCert.xValue(xdoc,root_xml+'/script/table/elem[@key="notAfter"]/text()');
+                notafter:=getcert.xValue(xdoc,root_xml+'/script/table/elem[@key="notAfter"]/text()');
                 date:= regex.extract(notafter, regex "((\d+-?)+)T", raw "\1");
                 dtime:= regex.extract(notafter, regex "T((\d+:?)+)", raw "\1");
                 validto:="%date% %dtime%";
-                md5:=traversysGetCert.xValue(xdoc,root_xml+'/script/elem[@key="md5"]/text()');
+                md5:=getcert.xValue(xdoc,root_xml+'/script/elem[@key="md5"]/text()');
                 re:="%pubkeybits%-bit";
 
                 // This function cleans up the date values
-                valid_from, valid_to:= traversysGetCert.valid_dates(validfrom, validto);
+                valid_from, valid_to:= getcert.valid_dates(validfrom, validto);
 
                 dev_ips:= search(DiscoveryAccess where _last_marker and endpoint = "%ip_addr%" traverse Associate:Inference:InferredElement:);
                 dev_cns:=search(Host,NetworkDevice,StorageSystem,SNMPManagedDevice,Printer where local_fqdn = "%sub_cname%"
@@ -284,7 +162,7 @@ pattern Traversys_getCert 1.5
                                     or sysname = "%iss_cname%");
 
                 // This function will automatically generate a unique key and name values
-                key, name, common_names:=traversysGetCert.build_key(ip_addr, sub_cname, iss_cname, type, dev_ips, dev_cns);
+                key, name, common_names:=getcert.build_key(ip_addr, sub_cname, iss_cname, type, dev_ips, dev_cns);
 
                 ips        := [ ip_addr ];
                 ports      := [ port ];
@@ -294,30 +172,31 @@ pattern Traversys_getCert 1.5
                 // Additional Info
                 serial:= none;
                 errors:= none;
+                sha256:= none;
                 self_signed:= false;
 
-                // scan_cmd:= "%traversysConfig.install_dir%/unlocker --ssl ";
+                scan:= discovery.runCommand(getCert_host, "timeout 1 openssl s_client -connect %connection% | openssl x509 -noout -fingerprint -sha256 -serial");
 
-                // if host then
-                //     scan:= discovery.runCommand(host, scan_cmd+connection);
-
-                //     if scan and scan.result then
-                //         serial:=regex.extract(scan.result, regex "serial=(\w+)", raw "\1");
-                //         errors:=regex.extract(scan.result, regex "verify error:(.*)", raw "\1");
-                //         if errors and errors matches "self signed certificate" then
-                //             self_signed:= true;
-                //         end if;
-                //     end if;
-                // end if;
+                if scan and scan.result then
+                    serial:=regex.extract(scan.result, regex "serial=(\w+)", raw "\1");
+                    errors:=regex.extract(scan.result, regex "verify error:(.*)", raw "\1");
+                    sha256:=regex.extract(scan.result, regex 'SHA256 Fingerprint=(\S+)', raw '\1');
+                    if errors and errors matches "self signed certificate" then
+                        self_signed:= true;
+                    end if;
+                    if sha256 then
+                        key:= "%ip_addr%/Cert/%sha256%"; // Matches BMC TKU
+                    end if;
+                end if;
 
                 // Get Ciphers
-                ciphers:=traversysGetCert.xValue(xdoc,root_xml+'/script[2]/@output');
+                ciphers:=getcert.xValue(xdoc,root_xml+'/script[2]/@output');
 
                 // Get Warnings
-                warnings:=traversysGetCert.xValue(xdoc,root_xml+'/script[2]/table/table[@key="warnings"]/elem/text()');
+                warnings:=getcert.xValue(xdoc,root_xml+'/script[2]/table/table[@key="warnings"]/elem/text()');
 
                 // Get Certificate Strength
-                least_strength:=traversysGetCert.xValue(xdoc,root_xml+'/script[2]/elem[@key="least strength"]/text()');
+                least_strength:=getcert.xValue(xdoc,root_xml+'/script[2]/elem[@key="least strength"]/text()');
 
                 existing_ssl_nodes:=search(Detail where key = "%key%");
 
@@ -350,7 +229,8 @@ pattern Traversys_getCert 1.5
                                      common_name                := sub_cname, // BMC TKU Value
                                      short_name                 := sub_cname, // BMC TKU Value
                                      rsa_encryption             := re,
-                                     sha_1_fingerprint          := sha, // BMC TKU Value - SHA256, can only be retrieved with OpenSSL
+                                     sha_1_fingerprint          := sha1,
+                                     sha_256_fingerprint        := sha256, // BMC TKU Value - SHA256, can only be retrieved with OpenSSL
                                      subject                    := sub,
                                      issuer                     := iss,
                                      organization               := sub_orgname, // BMC TKU Value
@@ -381,16 +261,13 @@ pattern Traversys_getCert 1.5
                                      _raw_not_before            := notbefore,
                                      _raw_not_after             := notafter,
                                      _md5sum                    := md5,
-                                     _sha                       := sha,
                                      _public_key_type           := pubkeytype,
                                      _public_key_bits           := pubkeybits,
                                      _ciphers                   := ciphers
                                  );
 
                 log.info("Created Detail node for %cd.name%");
-                if traversysConfig.rem_group then
-                    model.setRemovalGroup(cd, "ssl_details");
-                end if;
+                model.setRemovalGroup(cd, "ssl_details");
 
                 if self_signed then
                     cd.self_signed:= self_signed;
@@ -460,6 +337,7 @@ pattern Traversys_getCert 1.5
                                                                         port:= portn
                                                                         );
                                         log.info("New SI created %newSI.name%...");
+                                        model.setRemovalGroup(cd, "ssl_details");
                                         model.rel.HostedSoftware(Host := host, RunningSoftware := newSI);
                                         list.append(sis_with_ports,newSI);
                                     end if;
@@ -507,7 +385,7 @@ pattern Traversys_getCert 1.5
         xpath.closeDocument(xdoc);
 
         // Attribute cleanup - Inferred nodes only
-        traversysGetCert.att_cleanup();
+        getcert.att_cleanup();
 
     end body;
 

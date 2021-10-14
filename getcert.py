@@ -42,33 +42,29 @@ import csv
 import logging
 import configparser
 import argparse
-from argparse import RawTextHelpFormatter
 import secrets
 from pprint import pprint
+import ipaddress
 
 # Pip Packages
 import tideway
 import dotenv
 
-def csvFile(data, heads, args):
-    data.insert(0, heads)
-    with open(args.file, 'w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerows(data)
-    msg = "Results written to %s" % args.file
-    print(msg)
-    logger.info(msg)
-
-logfile = 'getCert_%s.log' % ( str(datetime.date.today()))
-logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode='w')
-logger = logging.getLogger("getCert")
+def ip_filter(ip):
+    try:
+        address = ipaddress.ip_address(ip)
+        if isinstance(address, ipaddress.IPv4Address):
+            return ip
+        else:
+            return None
+    except:
+        return None
 
 config = configparser.ConfigParser()
-
-parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=RawTextHelpFormatter)
+parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('-a', '--instance', dest='instance',  type=str, required=True, help='The target Discovery system.\n\n', metavar='<IP or URL used in install script>')
 parser.add_argument('-c', '--config', dest='config',  type=str, required=False, help='The location of the config.ini file.\n\n', metavar='<config.ini>')
-parser.add_argument('-l', '--logfile', dest='logfile',  type=str, required=False, help='Log standard output of scan.\n\n', metavar='<logfile>')
+parser.add_argument('-d', '--debug', dest='debug', action='store_true', required=False, help='Run in debug mode.\n\n')
 
 args = parser.parse_args()
 
@@ -87,6 +83,7 @@ if not cfexists:
 
 config.read(ini)
 root = config.get('ENV', 'root')
+logs = config.get('ENV', 'logs')
 temp = config.get('ENV', 'temp')
 iplist = config.get('ENV', 'iplist')
 mode = int(config.get('MODE', 'mode'))
@@ -99,10 +96,20 @@ date = datetime.datetime.now()
 libdir = root+"/lib"
 env = libdir+"/.env"
 
+logfile = '%s/getCert_%s.log' % (logs,str(datetime.date.today()))
+if args.debug:
+    logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode='w')
+else:
+    logging.basicConfig(level=logging.INFO, filename=logfile, filemode='w')
+logger = logging.getLogger("getCert")
+
 dotenv.load_dotenv(dotenv_path=env)
 
 tok_key = instance.replace(".","_").upper()
 if not tok_key:
+    msg = "Not able to find the token for %s, using DISCOVERY_DEFAULT..."%instance
+    print(msg)
+    logger.warning(msg)
     tok_key = 'DISCOVERY_DEFAULT'
 
 token = os.environ[tok_key]
@@ -147,6 +154,12 @@ else:
     logger.critical(msg)
     sys.exit(1)
 
+for line in fileinput.input(iplist,inplace=True):
+    # filter out IPv6 addresses until I can be arsed to accomodate them. Who is using IPv6 yet?
+    ipv4 = ip_filter(line)
+    if not ipv4:
+        print(line, end="")
+
 curated = os.popen("nmap -n -sL -iL %s -oG - | awk '/^Host/{print $2}'" % (iplist)).read()
 f = open(iplist, "w")
 for line in curated.splitlines():
@@ -154,8 +167,8 @@ for line in curated.splitlines():
     f.write("\n")
 f.close()
 
-if args.logfile:
-    os.system('nmap -oX %s -p %s -n --host-timeout %s --script ssl-cert,ssl-enum-ciphers -iL %s > %s 2>&1' % (capture, ports, timeout, iplist, args.logfile))
+if args.debug:
+    os.system('nmap -oX %s -p %s -n --host-timeout %s --script ssl-cert,ssl-enum-ciphers -iL %s > %s 2>&1' % (capture, ports, timeout, iplist, logfile))
 else:
     os.system('nmap -oX %s -p %s -n --host-timeout %s --script ssl-cert,ssl-enum-ciphers -iL %s > /dev/null' % (capture, ports, timeout, iplist))
 
@@ -165,10 +178,13 @@ for line in fileinput.FileInput(capture,inplace="1"):
     sys.stdout.write(line)
 
 phrase = secrets.token_hex(32)
-print("Randomly generated passphrase is:",phrase)
+logger.debug("Randomly generated passphrase is: %s"%phrase)
 
 os.system('echo "%s" | gpg --yes --batch --quiet --passphrase-fd 0 -o %s -c %s' % (phrase, temp + "/%s.gpg"%tok_key, capture))
-os.remove(capture)
+if args.debug:
+    pass
+else:
+    os.remove(capture)
 
 event = {
             "source": "getCert",
@@ -181,6 +197,12 @@ event = {
         
 ## Send event to Discovery
 events = disco.events()
-events.status(event)
+try:
+    posted = events.status(event)
+    logger.info("Event sent to %s:\n%s"%(instance,posted.text))
+except:
+    msg = "Failed to post even to %s\n%s"%(instance,event)
+    print(msg)
+    logger.critical(msg)
 
 sys.exit(0)
