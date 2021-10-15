@@ -11,6 +11,7 @@ yum -y install python3 && \
 yum -y install net-tools && \
 yum -y install openssh-server openssh-clients && \
 yum -y install python3-pip && \
+yum -y install makeself && \
 yum -y install zlib-devel && \
 yum -y install openssl && \
 yum -y install cronie && \
