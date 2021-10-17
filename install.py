@@ -99,6 +99,7 @@ def upload(disco, pattern_name, tpl_path):
 
 config = configparser.ConfigParser()
 parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=argparse.RawTextHelpFormatter)
+parser.add_argument('--target', dest='target', type=str, required=False, help='The target Discovery system.\n\n', metavar='<IP or URL used in install script>')
 parser.add_argument('--nokeys', dest='nokeys', action='store_true', required=False, help='Do no save authentication token.\n\n')
 parser.add_argument('--nopatterns', dest='nopatterns', action='store_true', required=False, help='Do no upload Knowledge patterns.\n\n')
 parser.add_argument('--debug', dest='debug', action='store_true', required=False, help='Run installation with debug logging.\n\n')
@@ -123,16 +124,19 @@ dotenv.load_dotenv(dotenv_path=env)
 
 os.system('clear')
 
-instance = input('Please enter the IP address or URL of Discovery: ')
+instance = args.target
+
 if not instance:
-    msg = "No Discovery instance supplied! Please run the install script again."
-    print(msg)
-    logger.critical(msg)
-    sys.exit(1)
+    instance = input('Please enter the IP address or URL of Discovery: ')
+    if not instance:
+        msg = "No Discovery instance supplied! Please run the install script again."
+        print(msg)
+        logger.critical(msg)
+        sys.exit(1)
 
 ## Get Discovery credential
 
-token = input('Please enter your Discovery API token: ')
+token = input('Please enter your Discovery API token for %s: '%instance)
 if not token:
     msg = "No token supplied! Please run the install script again."
     print(msg)

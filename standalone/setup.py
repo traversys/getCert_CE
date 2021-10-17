@@ -21,125 +21,116 @@
 #
 
 import configparser
+import argparse
 import socket
 import os
-import getpass
-import re
+import shutil
 import signal
-import subprocess
-import time
 import sys
+import datetime
+import logging
+import dotenv
+import glob
 
-def cleanup(root):
-    os.remove(root + "/Traversys_getCert_Functions.tpl")
-    os.remove(root + "/Traversys_getCert_Main.tpl")
-    os.remove(root + "/Traversys_getCert.tpl")
+config = configparser.ConfigParser()
+parser = argparse.ArgumentParser(description='getCert standalone install',formatter_class=argparse.RawTextHelpFormatter)
+parser.add_argument('--install', dest='install', action='store_true', required=False, help='Install getCert (with TPL upload).\n\n')
+parser.add_argument('--dashboards', dest='dashboards', action='store_true', required=False, help='Install dashboards and reporting (appliance).\n\n')
+parser.add_argument('--debug', dest='debug', action='store_true', required=False, help='Run installation with debug logging.\n\n')
+parser.add_argument('--replace', dest='replace', action='store_true', required=False, help='Overwrite files if they already exist.\n\n')
+
+args = parser.parse_args()
+
+pwd = os.getcwd()
+libdir = os.path.join(pwd,"lib")
+tpldir = os.path.join(pwd,"tpl")
+logdir = os.path.join(pwd,"logs")
+xmldir = os.path.join(pwd,"xml")
+ini = os.path.join(pwd,"config.ini")
+env = os.path.join(libdir,".env")
+
+logfile = '%s/install_%s.log' % (logdir,str(datetime.date.today()))
+if args.debug:
+    logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode='w')
+else:
+    logging.basicConfig(level=logging.INFO, filename=logfile, filemode='w')
+logger = logging.getLogger("getCert Installer")
+
+logger.debug("Working directory is: %s"%pwd)
+
+def install(extensions,from_dir,to_dir):
+    logger.debug("EXTENSIONS: %s"%extensions)
+    logger.debug("FROM DIR: %s"%from_dir)
+    logger.debug("TO DIR: %s"%to_dir)
+    for files in extensions:
+        to_move = glob.iglob(os.path.join(from_dir, files))
+        for f in to_move:
+            logger.debug("FILE F: %s"%f)
+            filename = os.path.basename(f)
+            existing = os.path.join(to_dir,filename)
+            logger.debug("DEST: %s"%existing)
+            if os.path.exists(existing):
+                if args.replace:
+                    shutil.move(f, existing)
+                    logger.debug("Replaced %s"%(existing))
+                else:
+                    logger.warn("Existing file was not overwritten %s"%existing)
+            else:
+                shutil.move(f, to_dir)
+                logger.debug("Installed %s in %s"%(f,to_dir))
+
+for path in [ libdir, tpldir, logdir, xmldir ]:
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+dotenv.load_dotenv(dotenv_path=env)
 
 os.system('clear')
 
 # Prevent Interrupt
 hold = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-### Read and Update Config ###
+install([ "*.tpl" ],pwd,tpldir)
+install([ "*.xml", "*.dash" ],pwd,xmldir)
+install([ "*.cron", "*.sh" ],pwd,libdir)
 
-config = configparser.ConfigParser()
+if args.install:
+    config.read(ini)
+    config.set('ENV', 'root', pwd)
+    with open(ini, 'w') as configfile:
+        config.write(configfile)
+    root = config.get('ENV', 'root')
+    appliance = socket.gethostname()
+    instance = input('Please enter the IP address or URL of Discovery (default=%s): '%appliance)
+    if not instance:
+        instance = appliance
+        msg = "Instance set to %."%instance
+        logger.info(msg)
+    os.system("%s/install --target %s"%(pwd,instance))
 
-### Setup root dir ###
-
-pwd = os.getcwd()
-cwd = (pwd + "/getCert")
-ini = (cwd + "/config.ini")
-config.read(ini)
-config.set('ENV', 'root', cwd)
-with open(ini, 'w') as configfile:
-    config.write(configfile)
-
-root = config.get('ENV', 'root')
-appliance = socket.gethostname()
-
-### Verify this is an Appliance ###
-
-cluster = os.system('systemctl is-active cluster > /dev/null')
-fs = os.system('df /usr/tideway > /dev/null')
-
-if cluster == 0 and fs == 0:
-    print("Appliance: %s" % (appliance))
-else:
-    print("Installing on none Discovery Appliance!")
-    cleanup(root)
-    os.remove(root + "/traversys_00_reports.xml")
-    os.remove(root + "/traversys_getCert.dash")
-    print("All done! You will need to configure crontab manually.")
-    print("Ensure that you install the full getCert package on an appliance and configure to use this host.")
-    sys.exit(0)
-
-### Get Appliance Version ###
-version = re.search("^(\d+)\.", os.environ['ADDM_VERSION']).group(1)
-
-### Update TPL file ###
-
-tplfile = open(root + "/Traversys_getCert_Main.tpl").read()
-newtpl = re.sub(r'install_dir := ~INSTALLDIR~;', 'install_dir := \'%s\';' % (root), tplfile)
-tplfile = open(root + "/Traversys_getCert_Config.tpl", 'w')
-tplfile.write(newtpl)
-tplfile.close()
-
-### Start Warning ###
-
-print("This install will temporily halt and reboot appliance services, do you want to continue?")
-yep = input('Enter "Y" to continue: ').lower().strip()
-if not yep == 'y':
-    print("Cleaning up, please run the install script again when ready.")
-    cleanup(root)
-    sys.exit(1)
-
-### Obtain Login Details ###
-
-login = input('Please enter your appliance login: ')
-if not login:
-    print("ERROR: You must enter a system user login! Please run the install script again.")
-    cleanup(root)
-    sys.exit(1)
-
-passwd = getpass.getpass(prompt='Please enter your appliance password: ')
-if not passwd:
-    print("ERROR: No password supplied! Please run the install script again.")
-    cleanup(root)
-    sys.exit(1)
-
-### Test Access ###
-
-test = os.system('/usr/tideway/bin/tw_pattern_management -u %s -p %s --list-uploads > /dev/null' % (login, passwd))
-if test == 0:
-    print("Login details confirmed.")
-else:
-    print("Login details failed! Please run the install script again.")
-    cleanup(root)
-    sys.exit(1)
-
-### Deploy TPL and Dashboards ###
-
-# Stop the appserver first
-os.system('/usr/tideway/bin/tw_service_control --stop appserver')
-
-os.system('/usr/tideway/bin/tw_pattern_management -u %s -p %s --install-activate %s/Traversys_getCert_Functions.tpl' % (login, passwd, root))
-os.system('/usr/tideway/bin/tw_pattern_management -u %s -p %s --install-activate %s/Traversys_getCert_Config.tpl' % (login, passwd, root))
-os.system('/usr/tideway/bin/tw_pattern_management -u %s -p %s --install-activate %s/Traversys_getCert.tpl' % (login, passwd, root))
-
-os.system('cp %s/traversys_00_reports.xml /usr/tideway/data/custom/reports' % (root))
-os.system('cp %s/traversys_getCert.dash /usr/tideway/etc/dashboards' % (root))
-
-# Restart the app server
-os.system('/usr/tideway/bin/tw_service_control --start appserver')
-
-### Tidy Up ###
-
-cleanup(root)
+if args.dashboards:
+    print("Dashboard deployment will temporily halt and reboot appliance services, do you want to continue?")
+    yep = input('Enter "Y" to continue: ').lower().strip()
+    if not yep == 'y':
+        logger.info("User opted not to continue.")
+        sys.exit(0)
+    # Stop the appserver first
+    os.system('/usr/tideway/bin/tw_service_control --stop appserver')
+    # Copy dashboards
+    os.system('cp %s/traversys_00_reports.xml /usr/tideway/data/custom/reports' % (xmldir))
+    os.system('cp %s/traversys_getCert.dash /usr/tideway/etc/dashboards' % (xmldir))
+    # Restart the app server
+    os.system('/usr/tideway/bin/tw_service_control --start appserver')
+    # Makeself script seems to bork this file into Windows CRLF (possibly because run in WSL?)
+    # So we have recreate the file with Python
+    with open('%s/cron.sh'%libdir) as original:
+        lines = [line.replace('\r\n', '\n') for line in original]
+    with open('%s/cron.sh'%libdir, 'w') as newer:
+        newer.writelines(lines)
+    os.chdir(libdir)
+    os.system('./cron.sh')
 
 # Restore Interrupt
 signal.signal(signal.SIGINT, hold)
-
 print("All done!")
-print("You can set the cronjob with the 'cron.sh' script\n")
-
 sys.exit(0)

@@ -2,7 +2,7 @@
 # (c) Copyright 2015-2021, Traversys Limited
 #
 
-source <(grep "root =" config.ini | sed 's/ *= */=/g')
+source <(grep 'root =' ../config.ini | sed 's/ *= */=/g')
 
 if [ "$TIDEWAY" == "" ]; then
           export TIDEWAY=/usr/tideway

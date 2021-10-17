@@ -134,3 +134,4 @@ makeself/Traversys/
 *.zip
 *.gpg
 temp/
+standalone/package/

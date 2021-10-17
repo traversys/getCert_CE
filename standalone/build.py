@@ -24,25 +24,30 @@ import os
 import sys
 import shutil
 import glob
-import hashlib
+import argparse
 import configparser
+import logging
+import dotenv
+import datetime
 
 config = configparser.ConfigParser()
 parser = argparse.ArgumentParser(description='getCert Utility',formatter_class=argparse.RawTextHelpFormatter)
-parser.add_argument('--nokeys', dest='nokeys', action='store_true', required=False, help='Do no save authentication token.\n\n')
-parser.add_argument('--nopatterns', dest='nopatterns', action='store_true', required=False, help='Do no upload Knowledge patterns.\n\n')
 parser.add_argument('--debug', dest='debug', action='store_true', required=False, help='Run installation with debug logging.\n\n')
 
 args = parser.parse_args()
 
 pwd = os.getcwd()
-libdir = (pwd + "/lib")
-tpldir = (pwd + "/tpl")
-logdir = (pwd + "/logs")
-ini = (pwd + "/config.ini")
+parent = os.path.dirname(pwd)
+libdir = (parent + "/lib")
+tpldir = (parent + "/tpl")
+logdir = (parent + "/logs")
+xmldir = (parent + "/xml")
+ini = (parent + "/config.ini")
 env = libdir+"/.env"
+dist = (pwd + "/dist")
+pkg = (pwd + "/package")
 
-logfile = '%s/install_%s.log' % (logdir,str(datetime.date.today()))
+logfile = '%s/build_%s.log' % (logdir,str(datetime.date.today()))
 if args.debug:
     logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode='w')
 else:
@@ -50,80 +55,54 @@ else:
 logger = logging.getLogger("getCert Installer")
 
 dotenv.load_dotenv(dotenv_path=env)
-
-os.system('clear')
-#########
-
-pwd = os.getcwd()
-source = (pwd + "/source")
-makeself = (pwd + "/makeself")
-getcert = (makeself + "/Traversys/getCert")
-dist = (makeself + "/dist")
-
-if not os.path.exists(getcert):
-    os.makedirs(getcert)
-
-binaries = [ "*.py" ]
-files = [ "*.tpl", "*.ini", "*.sh", "*.txt", "*.xml", "*.cron", "*.dash" ]
-pys = [ "getcert.py", "unlocker.py", "license_check.py", "setup.py" ]
-
 os.system('clear')
 
 ### Copy over source files
 
-license = (source + "/LICENSE")
-readme = (source + "/README")
-version = (source +  "/VERSION")
+license = (parent + "/LICENSE")
+readme = (parent + "/README")
+version = (parent +  "/VERSION")
+files = [ "*.ini", "*.cron", "*.sh", "*.tpl" ]
+py_files = [ "*.py" ]
 
-if os.path.isfile(license):
-    shutil.copy2(license,getcert)
+# Copy from current/parent folder
+for dir in [ parent, pwd, tpldir, xmldir ]:
+    for f in files:
+        to_copy = glob.iglob(os.path.join(dir, f))
+        for cf in to_copy:
+            if os.path.isfile(cf):
+                logger.info("Copying %s to %s"%(cf,pkg))
+                shutil.copy2(cf,pkg)
 
-if os.path.isfile(readme):
-    shutil.copy2(readme,getcert)
+# Copy metadata files
+for file in [ license, readme, version ]:
+    if os.path.isfile(file):
+        logger.info("Copying %s to %s"%(file,pkg))
+        shutil.copy2(file,pkg)
 
-if os.path.isfile(version):
-    shutil.copy2(version,getcert)
+# Compile python files for execution on remote
+for p in py_files:
+    b_files = glob.iglob(os.path.join(parent, p))
+    for py_file in b_files:
+        if os.path.isfile(py_file):
+            logger.info("Compiling %s "%(py_file))
+            os.system("pyinstaller --onefile %s"%py_file)
 
-for f in files:
-    source_files = glob.iglob(os.path.join(source, f))
-    for sf in source_files:
-        if os.path.isfile(sf):
-            shutil.copy2(sf,getcert)
+# Compile setup
+logger.info("Compiling setup file")
+os.system("pyinstaller --onefile %s/setup.py"%pwd)
 
-for b in binaries:
-    bin_files = glob.iglob(os.path.join(source, b))
-    for bf in bin_files:
-        if os.path.isfile(bf):
-            shutil.copy2(bf,makeself)
-
-### Compile Binaries
-
-#os.system("python3 -m py_compile %s/hide.py" % (makeself))
-#hider = (makeself +  "/hide.pyc")
-#if os.path.isfile(hider):
-#    os.chmod(hider, 0o755)
-#    shutil.copy2(hider,getcert + "/hide")
-
-os.chdir(makeself)
-
-for p in pys:
-    py_file = (makeself +  "/" + p)
-    if os.path.isfile(py_file):
-       os.system("pyinstaller --onefile %s" % (py_file))
-
+# Copy distributable binaries
 if os.path.exists(dist):
-    bin_pys = glob.iglob(os.path.join(dist, "*"))
-    for bf in bin_pys:
+    logger.info("Distribution dir created: %s"%(dist))
+    bins = glob.iglob(os.path.join(dist, "*"))
+    for bf in bins:
         if os.path.isfile(bf):
-            shutil.copy2(bf,getcert)
+            logger.info("Copying %s to %s"%(bf,pkg))
+            shutil.copy2(bf,pkg)
 
 ### Compile Distributable Binary
 
-os.system("makeself-2.4.0/makeself.sh --notemp ./Traversys ./traversys_getcert.run 'getCert SSL Certificate Discovery from Traversys' ./getCert/setup")
-
-with open(getcert + "/getcert",'rb') as gc:
-    data = gc.read()
-    md5get = hashlib.md5(data).hexdigest()
-    print("getcert MD5SUM: " + md5get + "\n")
+os.system("makeself --notemp --target ./Traversys/getCert ./package ./traversys_getcert.run 'getCert SSL Certificate Discovery from Traversys' ./setup")
 
 sys.exit(0)

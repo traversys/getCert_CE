@@ -6,6 +6,7 @@ LABEL org.opencontainers.image.authors="team@traversys.io"
 RUN yum clean all
 RUN yum -y --enablerepo=extras install epel-release && \
 yum -y install centos-release-scl && \
+yum install -y coreutils && \
 yum -y install nmap && \
 yum -y install python3 && \
 yum -y install net-tools && \
@@ -34,12 +35,3 @@ COPY dockerbuild/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 EXPOSE 22
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
-#
-# Build Docker image:
-#
-# docker build --tag getcert . # creates image getcert
-#
-# Run Docker Container
-#
-# docker run -t -d -p 2222:22 -v <your git dir>:/usr/dev getcert:latest
-#
