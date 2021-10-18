@@ -118,6 +118,8 @@ capture = temp+"/%s.xml"%tok_key
 if not os.path.exists(temp):
     os.makedirs(temp)
 
+disco = tideway.appliance(instance,token)
+
 if mode == 1:
     f = open(iplist, "w")
     f.write(testsubnet)
@@ -125,7 +127,6 @@ if mode == 1:
 elif mode == 2:
     shutil.copyfile(file,iplist)
 elif mode == 3:
-    disco = tideway.appliance(instance,token)
     data = disco.data()
     results = []
     try:

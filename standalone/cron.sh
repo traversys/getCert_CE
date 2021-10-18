@@ -9,8 +9,5 @@ if [ "$TIDEWAY" == "" ]; then
 fi
 . $TIDEWAY/tw_setup
 
-mv traversys_getCert.cron /usr/tideway/etc/cron/
-echo "# Every evening at 6pm" >> /usr/tideway/etc/cron/traversys_getCert.cron
-echo "0 18 * * * $root/getcert" >> /usr/tideway/etc/cron/traversys_getCert.cron
+cp traversys_getCert.cron /usr/tideway/etc/cron/
 tw_cron_update
-echo ""

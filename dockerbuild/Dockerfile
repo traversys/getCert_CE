@@ -23,8 +23,7 @@ RUN pip3 install pyinstaller==3.6
 RUN pip3 install wheel
 RUN pip3 install tideway
 RUN pip3 install python-dotenv
-# Start crond
-RUN echo "0 14 * * * root python3 /opt/Traversys/getCert/getcertpy -c /opt/Traversys/getCert/config.ini" >> /etc/crontab
+RUN pip3 install python-crontab
 # Setup sshd
 RUN mkdir /var/run/sshd
 RUN /usr/bin/ssh-keygen -A

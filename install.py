@@ -33,6 +33,7 @@ import argparse
 # Pip modules
 import tideway
 import dotenv
+from crontab import CronTab
 
 def ping(instance):
     current_os = platform.system().lower()
@@ -103,6 +104,7 @@ parser.add_argument('--target', dest='target', type=str, required=False, help='T
 parser.add_argument('--nokeys', dest='nokeys', action='store_true', required=False, help='Do no save authentication token.\n\n')
 parser.add_argument('--nopatterns', dest='nopatterns', action='store_true', required=False, help='Do no upload Knowledge patterns.\n\n')
 parser.add_argument('--debug', dest='debug', action='store_true', required=False, help='Run installation with debug logging.\n\n')
+parser.add_argument('--nocron', dest='nocron', action='store_true', required=False, help=argparse.SUPPRESS)
 
 args = parser.parse_args()
 
@@ -213,6 +215,21 @@ with open(ini, 'w') as configfile:
 
 root = config.get('ENV', 'root')
 logger.debug(root)
+
+if args.nocron:
+    msg = "Skip Docker crontab setup."
+    print(msg)
+    logger.info(msg)
+else:
+    # Setup crontab
+    cron = CronTab(tabfile='/etc/crontab', user=False)
+    job = cron.new(command='python3 /opt/Traversys/getCert/getcert.py -a %s -c /opt/Traversys/getCert/config.ini'%instance,user='root')
+    # 0 18 * * *
+    job.hour.every(18)
+    cron.write()
+    logger.info("Crontab set:")
+    for job in cron:
+        logger.info(job)
 
 ## Deploy TPL
 

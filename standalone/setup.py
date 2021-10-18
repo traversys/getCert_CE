@@ -49,6 +49,10 @@ xmldir = os.path.join(pwd,"xml")
 ini = os.path.join(pwd,"config.ini")
 env = os.path.join(libdir,".env")
 
+for path in [ libdir, tpldir, logdir, xmldir ]:
+    if not os.path.exists(path):
+        os.makedirs(path)
+
 logfile = '%s/install_%s.log' % (logdir,str(datetime.date.today()))
 if args.debug:
     logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode='w')
@@ -79,10 +83,6 @@ def install(extensions,from_dir,to_dir):
                 shutil.move(f, to_dir)
                 logger.debug("Installed %s in %s"%(f,to_dir))
 
-for path in [ libdir, tpldir, logdir, xmldir ]:
-    if not os.path.exists(path):
-        os.makedirs(path)
-
 dotenv.load_dotenv(dotenv_path=env)
 
 os.system('clear')
@@ -94,19 +94,21 @@ install([ "*.tpl" ],pwd,tpldir)
 install([ "*.xml", "*.dash" ],pwd,xmldir)
 install([ "*.cron", "*.sh" ],pwd,libdir)
 
+config.read(ini)
+config.set('ENV', 'root', pwd)
+with open(ini, 'w') as configfile:
+    config.write(configfile)
+root = config.get('ENV', 'root')
+
+appliance = socket.gethostname()
+instance = input('Please enter the IP address or URL of Discovery (default=%s): '%appliance)
+if not instance:
+    instance = appliance
+    msg = "Instance set to %."%instance
+    logger.info(msg)
+
 if args.install:
-    config.read(ini)
-    config.set('ENV', 'root', pwd)
-    with open(ini, 'w') as configfile:
-        config.write(configfile)
-    root = config.get('ENV', 'root')
-    appliance = socket.gethostname()
-    instance = input('Please enter the IP address or URL of Discovery (default=%s): '%appliance)
-    if not instance:
-        instance = appliance
-        msg = "Instance set to %."%instance
-        logger.info(msg)
-    os.system("%s/install --target %s"%(pwd,instance))
+    os.system("%s/install --target %s --nocron"%(pwd,instance))
 
 if args.dashboards:
     print("Dashboard deployment will temporily halt and reboot appliance services, do you want to continue?")
@@ -128,6 +130,9 @@ if args.dashboards:
     with open('%s/cron.sh'%libdir, 'w') as newer:
         newer.writelines(lines)
     os.chdir(libdir)
+    with open('traversys_getCert.cron', 'a') as cronfile:
+        cronfile.write("## Every evening at 6pm\n")
+        cronfile.write("0 18 * * * %(p)s/getcert -a %(i)s -c %(p)s/config.ini\n"%{'p':pwd,'i':instance})
     os.system('./cron.sh')
 
 # Restore Interrupt
