@@ -1,38 +1,38 @@
 <img src="images/logo.png" width="100"/>
 
-# getCert 1.6 for BMC Discovery
-
+# getCert 1.7.0 for BMC Discovery
 You can contact Traversys via email to teams@traversys.io or visiting our website https://traversys.io. From this website you can obtain information about our company, products and services.
 
 ## License Key Information
 If you have purchased a license key and have any questions, you can contact us for support using the details above, with your licensed email address.
 
 ## Tested Versions
-getCert 1.6 has been tested on the following versions of BMC Discovery (RHEL/CentOS). Other versions may be compatible but have not been tested.
+getCert 1.7.0 has been tested on the following versions of BMC Discovery (RHEL/CentOS). Other versions may be compatible but have not been tested.
 
-* 11.x
-* 12.0
+* 11.3
+* 12.x
 
 # Release Notes
 
-| Version | Summary | Known Issues | Bug Fixes |
-| :-----: | ------- | ------------ | --------- |
+| Version | Name | Known Issues | Enchancements |
+| :-----: | ---- | ------------ | ------------- |
 | 1.1.0   | Alpha release | | |
-| 1.2.0   | Beta release | | |
-| 1.3.0   | Updated ciphers and timeout functions. | | Using older version of NMAP to maintain compatibility with ADDM v10.x |
-| 1.4.0   | Updated config file using ConfigParser. Replaces the ssl_capture shell script. | | |
-| 1.5.0   | Added license key capability for 100 certificate limit. | | |
-| 1.6.0   | Community Edition | | Open sourced - no license limits. |
+| 1.2.0   | Beta release | | Added security cipher capture, artificial aging.<br>Updated method of creating a unique key.<br>Capturing subject and issuer details.<br>Added multiple port handling. |
+| 1.3.0   | Beta | | Updated ciphers and timeout functions. | | Using older version of NMAP to maintain compatibility with ADDM v10.x |
+| 1.4.0   | Beta | | Updated config file using ConfigParser. Replaces the ssl_capture shell script. |
+| 1.5.0   | Free/Licensed | | Added license key capability for 100 certificate limit.<br>Added removal groups, new method to capture serial number and other details. |
+| 1.6.0   | Community Edition | Web App Ports missing a total count<br>Wrong binary name in cron.sh script<br>No handling of IPv6 Addresses | Removed licensing requirements for Open Source Edition. |
+| 1.7.0 CE | ED-209 | IPv6 addresses not currently supported<br>Device > Certificate mappings not synced to CMDB | Updated attributes to match BMC TKU certificate details.<br>Migrated to SofwareInstance link. Will generate new SI if missing.<br>Main pattern now triggers on ExternalEvent. |
 
 # Overview
 
-Traversys getCert is an extension to on-premise BMC Discovery. It operates independently of Discovery scans to non-invasively collect information about externally facing SSL certificates (accessible via open web/application ports) against your data center infrastructure.
+Traversys getCert is an extension to BMC Discovery. It operates independently of Discovery scans in either a Docker container or a standalone script. getCert non-invasively collect information about externally facing SSL certificates (accessible via open web/application ports) against your data center infrastructure.
 
-The data that is collected is then in turn 'discovered' via scanning the getCert host (a Discovery Appliance), and building a list of certificate Detail nodes. If certificate hosting devices are also discovered, getCert will automatically attempt to map these via IP Address and/or Common Name of the discovered SSL certificate.
+getCet triggers an event to Discovery via the API which contains a temporary key to unlock the encrypted capture data stored with the getCert application files. The getCert pattern module will then trigger on the event and scan the getCert data source to retrieve and build a list of certificate Detail nodes. If any SoftwareInstances match the certificate IP or common name and port getCert will automatically attempt to map the Detail to the SI, alternatively, for other network devices - getCert will map directly to the device node.
 
-getCert is highly configurable, with the option to scan subnets, websites, DNS hostnames or IP addresses, and the discovered data can be added to the model in different ways (by default creating a Detail node).
+getCert comes with a beta CMDB sync pattern which follows the schema of BMC's TLS Certificate OOTB mappings - and will sync any SSL Certificate details mapped directly to a SoftwareInstance to BMC_Document.
 
-~~Note: The free version of getCert allows the ability to scan 100 endpoints per scan. These endpoints will be scanned in a randomised order and SSL Certificates will only be generated for those in scanned range.~~
+getCert is highly configurable, with the option to scan subnets, websites, DNS hostnames or IP addresses, and the discovered data can be added to the model in different ways with custom extensions.
 
 # Installation
 
@@ -40,73 +40,169 @@ getCert is highly configurable, with the option to scan subnets, websites, DNS h
 
 getCert does not require any external dependencies as it will use the same packages and libraries of the host Discovery Appliance RHEL or CentOS system.
 
-If you attempt to deploy getCert on a stand-alone server, you will find that it fails integrity checks, as the scripts depend upon the loaded TPL patterns. If you require a stand-alone version of getCert - please contact Traversys about professional support.
+getCert is developed and tested on a dockerised CentOS 7 instance, as well as BMC Discovery 12.3 appliance. If you use the standalone script to deploy getCert to another type of stand-alone server, you will need to ensure that it is a Linux-based system which has the same kernel runtime liberaries and version of GCC.
 
 ## Installation Steps
 
-1. Extract the the `traversys_getcert.run` binary from the zip file and deploy it to a suitable location on your appliance e.g. `/usr/tideway/data/customer`
-2. You may need to make the binary executable, if this is the case, as the tideway user, enter the following command e.g.
+### Container Install
+
+You must follow these steps even if you intend to use standalone.
+
+1. Install and configure Docker
+2. Run `docker build --tag getcert --progress=plain -f dockerbuild/Dockerfile .`
+3. Make a note of the password generated by the build script
+   ![alt text](images/screenshot.png "Get ssh password")
+4. Startup the Container `docker run -t -d -p 2222:22 --name getCert -v ${PWD}:/opt/Traversys/getCert getcert:latest`
+
+For the standalone installation jump to [Standalone Deployment](#standalone-deployment)
+
+### Setup Data Source and Event Source
+1. For local access, run `docker inspect getCert | grep 'IPAddress'`
+2. Test SSH from local host: `ssh getcert@<docker container IP>`
+3. Test SSH from outside host: `ssh getcert@<host ip address> -p 2222`
+4. In BMC Discovery, create a Data Source with the following details
+
+| Attribute   | Detail |
+| ----------- | ---- |
+| Name        | getCert
+| Type        | SSH
+| Description | Credentials for connecting to getCert docker instance
+| Endpoint    | The host IP where getCert docker is hosted
+| Username    | getcert
+| Password    | Password provided by the build script output
+| SSH Port    | 2222 (must be configured in Discovery Configuration)
+
+5. In Discovery administration, create an Event Source with the following details
+6. Create an API user with the following permissions: admin, api-access, public
+7. Generate the API token and save this for later
+
+| Attribute | Detail |
+| ----------- | ---- |
+| Name        | getCert
+| Description | Collects events from discovered getCert
+
+### getCert Docker Installation
+
+In order for getCert to run, an installation script has been provided to finalise configuration.
+
+1. Access the shell: `docker exec -it getCert /bin/bash`
+2. Navigate to `/opt/Traversys/getCert`
+3. Run the installation script `python3 install.py`
+4. You will be prompted to enter the URL or IP address of Discovery
+5. You will be prompted to enter the API token for this Discovery target
+6. Wait for the script to do it's updates and complete
+7. getCert is now ready to be called by the cronjob
+
+For Dashboards installation jump to [Dashboard Installtion](#dashboard-installation)
+
+## Standalone Deployment
+
+### Preparation
+
+In order to run getCert as a standalone instance outside of docker, you will need to run the build script to generate and installation file.
+
+1. Access the shell: `docker exec -it getCert /bin/bash`
+2. Navigate to `/opt/Traversys/getCert/standalone`
+3. Run the build script `python3 build.py`
+4. When the script has finished copy the `traversys_getcert.run` binary to the target system (e.g. Discovery Appliance `/usr/tideway/data/customer`)
+5. On the target system change permissions `chmod +x traversys_getcert.run`
+
+### Installation on a Discovery Appliance
+
+1. If you are installing for the first time on a Discovery Appliance, run the installation file with `install` and `dashboards` flags
+   - `./traversys_getcert.run -- --install --dashboards`
+2. You will be prompted to enter the URL or IP address of Discovery
+3. You will be prompted to enter the API token for this Discovery target
+6. Wait for the script to do it's updates and complete
+7. getCert is now ready to be called by the cronjob
+
+### Installation on a Linux System
+
+1. If you are installing for the first time, run the installation file with `install` flag
+   - `./traversys_getcert.run -- --install`
+2. You will be prompted to enter the URL or IP address of Discovery
+3. You will be prompted to enter the API token for this Discovery target
+4. Wait for the script to do it's updates and complete
+5. You will need to configure the cronjob seperately e.g.
+   - `0 18 * * * <install directory>/getcert -a <discovery URL or IP> -c <config_directory>/config.ini`
+
+## Dashboard Installation
+
+If you want to install dashboards on a Discovery Appliance for use with the getCert Docker instance follow these steps:
+
+1. Follow steps to [prepare the build file](#preparation)
+2. Run the installation file with `dashboards` flag
+   - `./traversys_getcert.run -- --dashboards`
+3. The installation script displays a warning that it will restart the application service. In order to continue, type **"Y"**
+   ![Enter "Y" to continue](images/4.png)
+4. Wait for the script to do it's updates and complete
+
+## Installed Pattern Modules
+
+| Pattern Module    | Summary |
+| ----------------- | ------- |
+| traversys_getCert | This is the main pattern module that triggers on an event sent from getCert
+| traversys_getCert_funcs | This contains functions associated with the getCert pattern module
+| traversys_getCert_CMDB_SI | This pattern contains the syncmappings that sync SSL Certificates discovered by getCert to the CMDB
+
+You are free to browse the contents of these TPL files to see how they work. You are also free to create your own custom patterns to replace them as necessary.
+
+## First Run
+
+When getCert is run for the first time, a new directory (default: `/temp`) will be created with the captured data stored inside.
+
+1. `ips` - Contains the list of IPs generated from the input
+2. `ssl-out.gpg` - an encrypted file of certificate data which can only be accessed via the token passed to the event and used by the getCert pattern.
+
+You can backup these files manually, they will be overwritten upon the next certificate scan.
+
+## Run getCert Manually
+
+To run getCert manually, you can trigger a certificate scan in the following way:
+
 ```console
-$ chmod +x /usr/tideway/data/customer/traversys_getcert.run
+$ screen
+$ python3 getcert.py --instance <Discovery URL or IP>
 ```
-3. From the binary location, run the command as follows:
+
+This will assume you are running from the root getCert directy with contains the config.ini file. If you are running from another directory, you can specify the config.ini location:
+
 ```console
-$ cd /usr/tideway/data/customer
-$ ./traversys_getcert.run
+$ screen
+$ python3 /opt/Traversys/getCert/getcert.py --instance <Discovery URL or IP> --config /opt/Traversys/getCert/config.ini
 ```
-4. The installation script displays a warning that it will halt the application service whilst installing. In order to continue, type "Y":\
-![Enter "Y" to continue](images/4.png)
-5. The script will then prompt you to enter your system user login and password. These will not be stored, and only used to initiate interaction with Discovery:\
-![Appliance login](images/5.png)
-6. The installation script will now stop the application services and deploy the getCert basic license and TPL files.\
-![Restarting services](images/6.png)
-7. The script has now deployed three patterns modules;
-   1. getCert_License
-   2. getCert_Config
-   3. getCert
 
-You are free to browse the contents of these TPL files to see how they work. However you must not attempt to alter getCert_License or getCert_Config in any way or it will cause the integrity check to fail and you will have to reinstall.
-You can create a custom pattern to replace getCert - however you will need to remove or modify import dependencies which are marked in the file with asterisks `***`.
+**WARNING** SSL Certificate discovery can be intensive, especially on large subnets, the scan may take a while to complete.
 
-![Patterns](images/7.png)
+# Configuration
 
-Continue the steps below to create a reporting user and configure getCert for scanning.
+## Default Configuration
 
-## Create a Reporting User
+You can set configuration options in the config.ini file in the root directory of getCert. By default getCert is configured to:
 
-getCert requires access to Discovery to verify integrity of files and export subnet lists (if you choose this option). Therefore an appliance login must be stored in a plain-text configuration file on the appliance CLI.
+- Run every day at 6 PM - this can be configured in `/etc/crontab`
+- Scan using the `testsubnet` parameter (mode=1)
+- Send an event on completion of the scan to the Discovery target and API token specified in the install script
+  - These are stored in environment variables in `/opt/Traversys/getCert/lib/.env`
 
-Your tideway credential will already give you system level access to all the appliance components - including the ability to change the system user password. However for peace of mind, you can optionally create a 'reporting only' user in the Discovery UI to be used by getCert.
+## Scan Modes
 
-8. Log into Discovery and navigate to Administration (cog) > Users
-9. Click on Add…
-10. Input a custom Username, Full Name, and Password\
-![Reporting user](images/10.png)
-11. Uncheck Force __Password Change On First Login__
-12. Check the groups __public__, __readonly__ and __[reports]__\
-![Groups](images/12.png)
-13. Click __Apply__
+getCert will commence in the background and export details to an encrypted data file.
 
-# Configure getCert
+There are 3 modes you can use and are set in the config file:
 
-Follow the steps below to configure getCert for scanning.
+1. Scan for SSL Certificates on the test ips/subnet string
+2. Scan for a list of ips/subnets in the specified input file
+3. Run the query (appliance login needed) to export a list of ips/subnets
 
-1. Change to the newly created directory:
-```console
-$ cd Traversys/getCert/
-```
-2. Open up `config.ini` for editing, using vi or nano:
-```console
-$ vi config.ini
-```
+## The Config File
 
 ```ini
 [ENV]
-root = /usr/tideway/data/customer/Traversys/getCert
+root = /opt/Traversys/getCert
 temp = %(root)s/temp
-log = %(temp)s/ssl-out.log
-capture = %(temp)s/ssl-out.xml
 iplist = %(temp)s/ips
+logs = %(root)s/logs
 
 [MODE]
 mode = 1
@@ -118,14 +214,7 @@ testsubnet = 192.168.1.0/24
 file = sample_input.txt
 
 [DISCO_QUERY]
-query = "search DiscoveryAccess where _last_marker show endpoint"
-
-[LOGIN]
-discouser = system
-discopass = system
-
-[CRON]
-cron = "0 1 * * 6"
+query = search DiscoveryAccess where _last_marker show endpoint
 
 [TIMEOUT]
 timeout = 3m
@@ -133,8 +222,7 @@ timeout = 3m
 [PORTS]
 ports = 261,443,448,465,563,587,614,636,989,990,992,993,994,995,2083,2087,2089,2096,2222,8443,8080,8880
 ```
-
-### Configuration
+### Configuration Options
 
 The following table details the configuration for environment.
 
@@ -142,8 +230,6 @@ The following table details the configuration for environment.
 | ---------- | ----------- |
 | root       | This is the root path of the getCert application files.<br>If you move the directory you must change this path. |
 | temp       | This is the temporary directory that capture files are stored in. |
-| log        | This is the location of the log file. |
-| capture    |This is the name of the capture file. |
 | ip list    | This is the temporary list of IPs curated from the input option. |
 
 The following table details the configuration options.
@@ -154,102 +240,12 @@ The following table details the configuration options.
 | TEST_SUBNET | testsubnet | This is an option for testing getCert - you can input any endpoint here. |
 | LIST_OF_IPS | file       | This is the name of the input file where you can specify a list of IPs, subnets, host or domain names.<br>The following syntax examples can be used:<br>192.168.1.100><br>192.168.1.1-100<br>192.168.1.0/28 |
 | DISCO_QUERY | query     | Here you can specify a query to be run in Discovery. You must ensure that the query outputs only a list of IPs, subnets or hostnames and no other attributes.<br>This option requires the Discovery login user to be set. |
-| LOGIN       | discouser | This is a user that can generate read-only reports. If you set a reporting user in the steps above, you can enter it here.<<br>Do not use any quotation marks to surround the username.<br>Escape characters using backslash e.g.: `\!` |
-| CRON        | cron      | This is the crontab settings to be used by the cron script. It follows standard crontab syntax.<br>__The default schedule is Every Saturday at 1AM__<br>It is recommended for large IP ranges (10,000+), that you run once a week - the certificate scan can take many hours to complete. |
 | TIMEOUT    | timteout   | This is the timeout for an individual endpoint during certificate scan.<br>Some devices can take a long time to respond - particularly if scanning many ports, therefore you can tweak this to improve performance.<br>A lower timeout will result in less successful discovery, a higher timeout will be more successful but take longer to complete.<br>Options are:<br>__ms__ = milliseconds<br>__s__ = seconds<br>__m__ = minues<br>__h__ = hours
 | PORTS      | ports      | Here you can configure the port numbers that you want to use for discovering certificates on.<br>The default list contains the numbers of common, industry-wide and recognised standard SSL ports.<br>It is not recommended to scan every port for every endpoint as it would take a very long time to complete and likely timeout before every port was checked.<br>If you have non-standard custom ports, you can add them here using comma separated syntax.
 
-1. Once you have finalised the configuration options, you can validate the installation of getCert using the license_check tool:
-```console
-$ ./license_check
-```
-If you have the basic (free) license then the output should look like this:\
-![License check](images/license.png)
-
-4. You can configure crontab by using the `cron.sh` script which has been provided to make it easier to deploy.
-```console
-$ ./cron.sh
-```
-5. To run getCert manually, you can simply run the get command from the CLI:
-```console
-$ ./getcert
-```
-6. If this is run for the first time, a new directory (default: temp) will be created with the captured data stored inside.
-   1. `ips` - Contains the list of IPs generated from the input
-   2. `ssl-out.log` - a log file of successful certificate scan results
-   3. `ssl-out.gpg` - an encrypted file of certificate data which can only be accessed via the Discovery scan.
-
-You can backup these files manually, they will be overwritten upon the next certificate scan.
-
-# Discovery Configuration
-
-Upon successful installation, 3 TPL pattern modules are uploaded to Discovery.
-
-You have the following pattern configuration options.
-
-| Option      | Default | Description |
-| :---------- | ------- | ----------- |
-| Install Directory | `/usr/tideway/data/customer/Traversys/getCert` | This is set as the default directory of the installed files.
-| Attempt to map SSL Certificates to Discovered Device? | True | Since the SSL Certificates are discovered independently of devices, by default the pattern will attempt to resolve relationships in the data model.<br>This is done using IP address.
-| Attempt to map SSL Certificates using Common Name? | True | Where IP address fails, it is also possible to use the SSL certificate common name to identify devices by name.<br>By default the pattern will attempt to use common name if a relationship cannot be established using a matching IP address.
-| Break inference relationship? | False | When Discovery scans the appliance with getCert installed, all inferred Detail nodes will have a provenance relationship back to the appliance host node.<br>You can choose to break this relationship so that it does not present an incorrect impact relationship.
-| Artificially age out certificates (7 days)? | False | By default the certificates will not age and will be attached to a device until the end of that device lifespan.<br>You can utilise the pattern's aging function to remove certificates not discovered after 7 days.
-| Set Removal Group? | False | Removal Groups are used by Discovery to compare the last set of nodes generated with the new/current set since the pattern last run.<br>Any inferred nodes that are no longer confirmed are removed. This is an effective way of house-cleaning, but may cause certificate details to be lost if not discovered on the next run.
-| Infer File node? | True | Allows the Config pattern to create a File node which will contain the content of XML certificate data.<br>This can be suppressed if necessary but not recommended.
-
-You will be unable to change the TPL code directly in getCert_Config. Instead you can create a custom pattern based on getCert and use the XML data generated by getCert_Config.
-
-By default the getCert pattern generates a Detail node and will attempt to relate it to the associated device, if discovered. More information about customising this file is covered in the Customisation section.
-
-# Enterprise License
-
-If you have purchased the 3-year Enterprise License, then you can add this file after completing the installation steps above.
-
-In order to activate the Enterprise License, place the license_key file in the root directory for getCert e.g.:
-
-`/usr/tideway/data/customer/Traversys/getCert`
-
-You can then run the license_check utility to confirm that the license key is found and is valid.
-
-```console
-$ ./license_check
-```
-
-# Removal
-
-The following steps detail how to remove getCert from any appliance.
-
-## Installed Files
-
-### Appliance Command Line
-
-| Directory | Files |
-| --------- | ----- |
-| `<root directory>/Traversys/getCert/` | config.ini<br>cron.sh<br>getcert<br>LICENSE<br>license_check<br>README<br>sample_input.txt<br>setup<br>traversys_00_reports.xml<br>traversys_getCert.cron<br>traversys_getCert.dash<br>unlocker<br>VERSION
-| `<root directory>/Traversys/getCert/temp/` | ips<br>ssl-out.gpg<br>ssl-out.log
-| `/usr/tideway/data/custom/reports/`| traversys_00_reports.xml
-| `/usr/tideway/etc/cron/` | traversys_getCert.cron
-| `/usr/tideway/etc/dashboards/` | traversys_getCert.dash
-
-### Appliance Knowledge Management
-
- - Traversys
-   - SSL Discovery
-     - getCert
-     - getCert_License
-     - getCert_Config
-
-### Appliance Dashboards
-
- - SSL Certificates (getCert)
-
-You can remove all files within the getCert root directory, optionally after taking a backup.
-
 # Viewing Results
 
-In order to discover SSL Certificates, you need to have at least run the getcert binary once, and generated the necessary temp directory and capture files.
-
-You can then run a scan against the appliance(s) that have getCert installed.
+In order to discover SSL certificates, you need to have at least run getCert once with a successful event and pattern trigger, and generated the necessary temp directory and capture files.
 
 ## SSL Certificates Dashboard
 
@@ -257,44 +253,58 @@ The dashboard is installed automatically and can be found under the Dashboards d
 
 ![Dashboard](images/dashboard.png)
 
-# Customisation
-
-By default the getCert is configured to run OOTB with flexibility to allow control over where getCert is installed, relationships and aging, however more freedom may be desired to generate alternative data model structures.
-
-This can be achieved by modifying the getCert pattern to remove all references to `getCert_License` and `getCert_Config` as well as the associated functions.
-
-In order to customise getCert, follow these steps:
-
-1. Remove Imports\
-![Remove imports](images/remove_1.png)
-2. Remove or replace the date cleanup function and modify valid_from and valid_to attributes\
-![Remove imports](images/remove_2.png)
-3. Remove or replace the removal group check\
-![Remove imports](images/remove_3.png)
-4. Remove or replace the 'map to devices' check\
-![Remove imports](images/remove_4.png)
-5. Remove or replace the 'map to common name' check\
-![Remove imports](images/remove_5.png)
-6. Remove the 'break relationship' function\
-![Remove imports](images/remove_6.png)
-
-If you have modified or replaced the main getCert pattern, then you can safely remove the `getCert_Config` pattern also if you don't require it.
-
-As long as the `getCert_License` pattern remains installed, you can edit the getCert pattern to use SSL Certificate data to suit requirements, including using alternative nodes to Detail or associating these to SoftwareInstances instead of the Host node.
-
 # Security
 
-getCert is an extension for BMC Discovery, all installation files are designed to be deployed and contained within the Discovery Appliance, and therefore benefit from the standard OS level security of the Discovery Appliance.
+getCert is an extension for BMC Discovery, designed to run independently of Discovery but tightly integrated via API for population the Discovery datastore with certificate data.
 
 getCert does not require login to endpoints or devices, and is scanning standard ports which would ordinarily present an SSL certificate to an internet browser or application on GET or POST request.
 
-Data gathered from SSL Certificate scanning is encrypted with CAST-128 (CAST5).
+Data gathered from SSL Certificate scanning is encrypted with CAST-128 (CAST5). A new key is generated for every scan and this is sent with the event data via API for one time use/data source scan.
 
-getCert requires a login user and password stored in it's `config.ini` file. This is only required for READ operations.
+## The Docker Container
+
+All installation files are designed to be deployed and contained within the Docker container. By default Docker images run as root and rely on local host security. The Docker instance runs an sshd daemon which only accepts login from a pre-configured user 'getcert' and autogenerated SSH password. This can be configured manually to a different user.
+
+getCert stores the Discovery API token in an environment variable inside the Docker container that is only available to the container itself. The environment variables are located in `<install dir>/lib/.env`. This is only used for HTTPS READ operations and is not transimitted or stored anywhere else.
+
+## Standalone Installation
+
+All installation files are designed to be deployed and contained within the Discovery Appliance, and therefore benefit from the standard OS level security of the Discovery Appliance.
+
+getCert stores the Discovery API token in an environment variable on the local host in `<install dir>/lib/.env`. This is only used for HTTPS READ operations and is not transimitted or stored anywhere else.
 
 _All UI user logins (including the `system` user) can be reset at the command line (logged in as the `tideway` user) using `tw_passwd` command. Therefore the risk of storing login details in `config.ini` is minimal - since any login can be exploited after `tideway` user access is gained._
 
 _The `tideway` user should always be treated as a `root` user_
+
+# Removal
+
+The following steps detail how to remove getCert from a Discovery Appliance.
+
+## Installed Files
+
+### Appliance Command Line
+
+| Directory | Files |
+| --------- | ----- |
+| `<root directory>/Traversys/getCert/` | All files and subdirectories
+| `/usr/tideway/data/custom/reports/`| traversys_00_reports.xml
+| `/usr/tideway/etc/cron/` | traversys_getCert.cron
+| `/usr/tideway/etc/dashboards/` | traversys_getCert.dash
+
+### Appliance Knowledge Management
+
+ - Traversys
+   - getCert
+     - getCert
+     - traversys_getCert_funcs
+     - traversys_getCert_CMDB_SI
+
+### Appliance Dashboards
+
+ - SSL Certificates (getCert)
+
+You can remove all files within the getCert root directory, optionally after taking a backup.
 
 # Troubleshooting
 
@@ -309,7 +319,7 @@ $ cp -pv config.ini config.bkup
 ```
 2. From the original binary location, run the command as follows:
 ```console
-$ ./traversys_getcert.run
+$ ./traversys_getcert.run -- --replace
 ```
 3. Follow the prompts and enter your system/admin user login details.
 4. Restore your `config.ini`, cron and input files:
@@ -332,16 +342,6 @@ If you get this type of error or similar during installation, it may be because 
 ![Install Error](images/install.png)
 
 You can check Knowledge Management, and if the patterns have not loaded, delete any getCert patterns and run the installation script again after resolving any other issues that may have occurred first.
-
-## Integrity Check Failed
-
-If you receive this error, check the login id and password stored in config.ini by running a tw command such as:
-
-```console
-$ tw_options -u <user id>
-```
-
-If the user id succeeds, then it may be that one or more of the installed files is missing or corrupted. You can remediate this following the steps above for [Missing Installation Files](#Missing-Installation-Files).
 
 ## Knowledge Upload Error
 
