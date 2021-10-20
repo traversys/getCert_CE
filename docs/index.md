@@ -22,7 +22,11 @@ getCert 1.7.0 has been tested on the following versions of BMC Discovery (RHEL/C
 | 1.4.0   | Beta | | Updated config file using ConfigParser. Replaces the ssl_capture shell script. |
 | 1.5.0   | Free/Licensed | | Added license key capability for 100 certificate limit.<br>Added removal groups, new method to capture serial number and other details. |
 | 1.6.0   | Community Edition | Web App Ports missing a total count<br>Wrong binary name in cron.sh script<br>No handling of IPv6 Addresses | Removed licensing requirements for Open Source Edition. |
-| 1.7.0 CE | ED-209 | IPv6 addresses not currently supported<br>Device > Certificate mappings not synced to CMDB | Updated attributes to match BMC TKU certificate details.<br>Migrated to SofwareInstance link. Will generate new SI if missing.<br>Main pattern now triggers on ExternalEvent. |
+| 1.7.0 CE | ED-209 | IPv6 addresses not currently supported<br>Device > Certificate mappings not synced to CMDB | Updated attributes to match BMC TKU certificate details.<br>Migrated to SofwareInstance link. Will generate new SI if missing.<br>Implemented external events plus data source lookup.<br>getCert now runs out of a Docker container or as a standalone script. |
+
+## Archive Links
+
+- [getCert 1.6 Documentation](archive/1_6_0.md)
 
 # Overview
 
