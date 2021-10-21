@@ -1,7 +1,9 @@
 <img src="images/logo.png" width="100"/>
 
 # getCert 1.7.0 for BMC Discovery
-You can contact Traversys via email to teams@traversys.io or visiting our website https://traversys.io. From this website you can obtain information about our company, products and services.
+
+- TOC
+{:toc}
 
 ## License Key Information
 If you have purchased a license key and have any questions, you can contact us for support using the details above, with your licensed email address.
