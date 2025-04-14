@@ -20,7 +20,7 @@ getCert 1.7.0 has been tested on the following versions of BMC Discovery (RHEL/C
 | :-----: | ---- | ------------ | ------------- |
 | 1.1.0   | Alpha release | | |
 | 1.2.0   | Beta release | | Added security cipher capture, artificial aging.<br>Updated method of creating a unique key.<br>Capturing subject and issuer details.<br>Added multiple port handling. |
-| 1.3.0   | Beta | | Updated ciphers and timeout functions. | | Using older version of NMAP to maintain compatibility with ADDM v10.x |
+| 1.3.0   | Beta | Using older version of NMAP to maintain compatibility with ADDM v10.x | Updated ciphers and timeout functions. | |
 | 1.4.0   | Beta | | Updated config file using ConfigParser. Replaces the ssl_capture shell script. |
 | 1.5.0   | Free/Licensed | | Added license key capability for 100 certificate limit.<br>Added removal groups, new method to capture serial number and other details. |
 | 1.6.0   | Community Edition | Web App Ports missing a total count<br>Wrong binary name in cron.sh script<br>No handling of IPv6 Addresses | Removed licensing requirements for Open Source Edition. |

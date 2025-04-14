@@ -18,6 +18,34 @@
 # Author: Wes Moskal-Fitzpatrick (Traversys)
 #
 # Created: 2017-02-03
+
+# Example XML output (Illustrative, may vary based on nmap version and scan):
+# <?xml version="1.0" encoding="UTF-8"?>
+# <!DOCTYPE nmap PUBLIC "-//Nmap//DTD Nmap 7.92//EN" "https://nmap.org/dtd/nmap.dtd">
+# <nmaprun scanner="nmap" args="nmap -oX output.xml -p 443 -n --host-timeout 300 --script ssl-cert,ssl-enum-ciphers -iL iplist.txt" start="1678886400" startstr="Tue Mar 15 10:00:00 2023" version="7.92" xmloutputversion="1.05">
+#   <host><status state="up" reason="arp-response" reason_ttl="0"/>
+#     <address addr="192.168.1.1" addrtype="ipv4"/>
+#     <hostnames><hostname name="router.home" type="PTR"/></hostnames>
+#     <ports><port protocol="tcp" portid="443"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="https" method="table" conf="3"/>
+#       <script id="ssl-cert" output="Subject: commonName=example.com&#xa;Issuer: ...&#xa;Not valid before: ...&#xa;Not valid after: ...&#xa;..."/>
+#       <script id="ssl-enum-ciphers" output="..."/>
+#     </port></ports>
+#   </host>
+#   <host><status state="up" reason="arp-response" reason_ttl="0"/>
+#     <address addr="192.168.1.2" addrtype="ipv4"/>
+#     <hostnames><hostname name="server.home" type="PTR"/></hostnames>
+#     <ports><port protocol="tcp" portid="443"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="https" method="table" conf="3"/>
+#       <script id="ssl-cert" output="Failed to extract certificate from TLS server"/>
+#     </port></ports>
+#   </host>
+# </nmaprun>
+#
+# Expected output format:
+# [
+#   {'ip': '192.168.1.1', 'hostname': 'router.home', 'ports': [{'portid': '443', 'protocol': 'tcp', 'state': 'open', 'service': 'https', 'ssl-cert': 'Subject: ...', 'ssl-enum-ciphers': '...'}]},
+#   {'ip': '192.168.1.2', 'hostname': 'server.home', 'ports': [{'portid': '443', 'protocol': 'tcp', 'state': 'open', 'service': 'https', 'ssl-cert': 'Failed to extract ...', 'ssl-enum-ciphers': None}]}
+# ]
+#
 #
 # Change History:
 # 2019-02-03 : WMF : Updated ciphers and timeout functions. Using older version of NMAP to
@@ -29,6 +57,8 @@
 # 2021-02-13 : WMF : Removed licence check for Open Source edition.
 # 2021-09-22 : WMF : Updated configparser import for Python3 compatibility.
 # 2021-10-03 : WMF : Updated to a stand-alone script using API calls for Discovery interaction.
+# 2025-04-14 : WMF : Removed requirement for GPG, added archiving.
+#                    Added PostgreSQL storage.
 #
 
 # Standard Packages
@@ -50,7 +80,11 @@ import ipaddress
 import tideway
 import dotenv
 
+# Local
+from upsert_function import parse_nmap_xml, upsert_cert_data
+
 def ip_filter(ip):
+
     try:
         address = ipaddress.ip_address(ip)
         if isinstance(address, ipaddress.IPv4Address):
@@ -102,6 +136,13 @@ if args.debug:
 else:
     logging.basicConfig(level=logging.INFO, filename=logfile, filemode='w')
 logger = logging.getLogger("getCert")
+
+# Retrieve PostgreSQL credentials from environment variables
+postgres_user = os.environ.get("POSTGRES_USER")
+postgres_password = os.environ.get("POSTGRES_PASSWORD")
+postgres_db = os.environ.get("POSTGRES_DB")
+
+logger.debug(f"PostgreSQL Credentials - User: {postgres_user}, Database: {postgres_db}")
 
 dotenv.load_dotenv(dotenv_path=env)
 
@@ -173,6 +214,15 @@ if args.debug:
 else:
     os.system('nmap -oX %s -p %s -n --host-timeout %s --script ssl-cert,ssl-enum-ciphers -iL %s > /dev/null' % (capture, ports, timeout, iplist))
 
+# Backup the capture file before overwriting
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+backup_file = f"{capture.rsplit('.', 1)[0]}_{timestamp}.xml"
+try:
+    shutil.copyfile(capture, backup_file)
+    logger.info(f"Capture file archived to: {backup_file}")
+except FileNotFoundError:
+    logger.warning(f"Original capture file not found: {capture}. No archive created.")
+
 for line in fileinput.FileInput(capture,inplace="1"):
     line = re.sub("(<!--.*)as: nmap.*?(-->)", r"\1\2", line)
     line = re.sub("(.*args=\")nmap.*?(\".*>)", r"\1\2", line)
@@ -205,5 +255,8 @@ except:
     msg = "Failed to post even to %s\n%s"%(instance,event)
     print(msg)
     logger.critical(msg)
+
+cert_data = parse_nmap_xml(capture)
+upsert_cert_data(cert_data)
 
 sys.exit(0)

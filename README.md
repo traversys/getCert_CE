@@ -4,7 +4,11 @@ Copyright 2021 Traversys Limited
 |     |     |
 | --- | --- |
 | License | Apache License 2.0 |
-| Version | 1.7.0 (ED-209) |
+| Version | 1.7.1 |
+
+# Experimental
+
+Added PostgreSQL using Google Firebase.
 
 # Overview
 
